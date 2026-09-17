@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-white text-ink font-sans text-[13px] leading-normal;
+  }
+  /* Tabular figures everywhere — this is a dense numeric tool. */
+  table,
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-1;
+  }
+}

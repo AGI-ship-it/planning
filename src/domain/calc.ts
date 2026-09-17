@@ -43,9 +43,7 @@ export function calculate(input: CalcInputs): RequirementLine {
   // --- Consumption statistics -------------------------------------------------
   const l3 = lastN(m.consumption, 3)
   const l6 = lastN(m.consumption, 6)
-  const lm = m.consumption.at(-1) ?? 0
   const l3m = mean(l3)
-  const l6m = mean(l6)
   const sd6 = stdev(l6)
 
   trace.push({

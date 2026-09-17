@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/api/mrp.ts","./src/data/seed.ts","./src/domain/calc.ts","./src/domain/config.ts","./src/domain/forecast.ts","./src/domain/rules.ts","./src/domain/types.ts","./src/domain/units.ts","./src/features/uploadstep.tsx","./src/lib/format.ts","./src/ui/primitives.tsx"],"version":"5.9.3"}

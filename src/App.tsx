@@ -8,7 +8,7 @@ import { useEffect } from 'react'
 // Rather than leave / broken or overwrite index.html, this sends it to the file
 // that actually runs. If the React build is ever picked up again, replace this
 // with the real root component and the redirect goes with it.
-const PROTOTYPE = '/preview.html'
+const PROTOTYPE = 'preview.html'
 
 export default function App() {
   useEffect(() => {

@@ -1,10 +1,15 @@
-name: Build
+name: Build and deploy
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -17,7 +22,19 @@ jobs:
       # Committed node_modules holds macOS-native binaries (esbuild, rollup), so reinstall for Linux
       - run: rm -rf node_modules && npm ci
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      # The prototypes are standalone HTML files outside Vite's graph
+      - run: cp preview.html mrp-pr.html mrp-planner.html dist/
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: dist
           path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

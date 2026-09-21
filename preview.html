@@ -2115,6 +2115,8 @@
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 22px; }
   .head h2 { margin: 0; font-size: var(--fs-lg); font-weight: var(--w-semi); letter-spacing: -.015em; text-wrap: balance; }
   .head p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+  .head .ap-status { max-width: none; color: var(--ink); }
+  .head .ap-status > span { color: var(--muted); margin-right: 4px; }
   /* Every page title starts at the left margin, whether or not something sits
      beside it. This used to centre itself when the head had no action on the
      right, which made Order list and Review read differently from every
@@ -4984,7 +4986,7 @@
                           detail:`${state.approvalReq.ref} went out on ${dStamp(state.approvalReq.at)}. Once they approve it in the email it will be reflected here \u2014 nothing reaches Dynamics until then.`,
                           cta:'Check for a reply', step:STEP_APPROVE };
     const need = planBook().filter(b => balanceOf(b) > 0);
-    return { k:'complete', title:`${need.length} approved line${need.length === 1 ? '' : 's'} to create a PR for`,
+    return { k:'complete', title:`${need.length} approved line${need.length === 1 ? '' : 's'} to raise a PR for`,
              detail:`${state.approvalReq.to} answered all ${orders.length} lines. Raise a PR against each approved line, for as much of it as you need now — ${aedM(need.reduce((a, b) => a + balanceOf(b) * b.price, 0))} not on a PR yet.`,
              cta:'Raise PRs', step:STEP_APPROVE };
   }
@@ -9430,7 +9432,7 @@ ${unitBoardHtml()}
         <span class="prdone-ic" aria-hidden="true">${todo ? '⋯' : '✓'}</span>
         <div>
           <div class="prdone-t">${todo
-            ? `<span class="num">${fmt(todo)}</span> approved line${todo === 1 ? '' : 's'} to create a PR for`
+            ? `<span class="num">${fmt(todo)}</span> approved line${todo === 1 ? '' : 's'} to raise a PR for`
             : 'Every approved line is fully on a PR'}</div>
           <div class="prdone-s">${fmt(bk.length)} approved · ${fmt(planPrs().length)} PR${planPrs().length === 1 ? '' : 's'} raised · ${aedM(raisedVal)} raised · ${aedM(balVal)} still to raise</div>
         </div>
@@ -9548,16 +9550,9 @@ ${unitBoardHtml()}
     return `
       <div class="head">
         <div>
-          <h2>Order list — ${esc(myName())}</h2>
-          <p>Every line this cycle asks for, by unit, with the working behind each one. Once a line is approved, create a PR against it — as many as it takes.</p>
-        </div>
-        <div class="listdate">
-          <span class="label">Raised</span>
-          <span>${esc(dShort(state.run && state.run.t0 ? new Date(state.run.t0) : new Date()))}</span>
-          <span class="label">Required by</span>
-          <span>${esc(dShort(needBy()))}</span>
-          ${state.approvalReq ? `<span class="label">Sent for approval</span>
-          <span>${esc(dStamp(state.approvalReq.at))}</span>` : ''}
+          <h2>Order list — ${esc(myName())} ${infoMark('Every line this cycle asks for, by unit, with the working behind each one. Once a line is approved, raise a PR against it — as many as it takes.')}</h2>
+          <p class="ap-status">Raised ${esc(dShort(state.run && state.run.t0 ? new Date(state.run.t0) : new Date()))}, required by ${esc(dShort(needBy()))}${
+            state.approvalReq ? `, sent for approval ${esc(dStamp(state.approvalReq.at))}` : ''}</p>
         </div>
       </div>
 
@@ -9957,6 +9952,17 @@ ${unitBoardHtml()}
       <div class="head">
         <div>
           <h2>Approval — ${esc(myName())} ${infoMark('The approver answers by email. Once they approve it there, it will be reflected here. Each approved line then gets its own Raise PR — rejected lines cannot be raised.')}</h2>
+          ${req ? `
+          ${/* Between the send and the reply the screen is a receipt, not a form,
+               so where the list stands sits under the title as its subtitle. */ ''}
+          <p class="ap-status" role="status">
+            <span aria-hidden="true">${answered ? '✓' : '⏳'}</span>
+            <b>${esc(req.ref)}</b> sent for approval on ${esc(dStamp(req.at))}
+            · ${fmt(req.count)} line${req.count === 1 ? '' : 's'} · ${aedM(req.value)}.
+            ${answered
+              ? `Answered — ${fmt(app.length)} approved${rej.length ? `, ${fmt(rej.length)} rejected` : ''}.`
+              : 'Waiting on their reply.'}
+          </p>` : ''}
         </div>
       </div>
 
@@ -9965,22 +9971,6 @@ ${unitBoardHtml()}
         <span class="pill p-mute">Dry run</span>
         <span>A dry run cannot be sent for approval and cannot raise a PR. Run it for real from Review MRP items when you want to act on it.</span>
       </div>` : ''}
-
-      ${req ? `
-      ${/* Between the send and the reply the screen is a receipt, not a form:
-           the planner has nothing to do here but wait, so the only thing it
-           offers is a way to see whether the answer has landed. */ ''}
-      <div class="alertbar ${answered ? '' : 'warn'}">
-        <span class="alert-i" aria-hidden="true">${answered ? '✓' : '⏳'}</span>
-        <span>
-          <b>${esc(req.ref)}</b> sent for approval on ${esc(dStamp(req.at))}
-          · ${fmt(req.count)} line${req.count === 1 ? '' : 's'} · ${aedM(req.value)}.
-          ${answered
-            ? `Answered — ${fmt(app.length)} approved${rej.length ? `, ${fmt(rej.length)} rejected` : ''}.`
-            : `Waiting on their reply. Nothing on this screen changes until it arrives.`}
-        </span>
-      </div>` : ''}
-
 
       <div class="panel">
         <div class="panel-h">

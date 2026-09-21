@@ -97,7 +97,9 @@
     --surface: #ffffff;
     --surface-2: var(--grey-200);
     --ink: var(--grey-1000);
-    --muted: var(--grey-600);
+    /* A step darker than Grey 600: at 11-12px that shade reads 4.4:1 on the
+       grey table header and row hover, under the 4.5:1 WCAG AA floor. */
+    --muted: #66666e;
     --faint: color-mix(in srgb, var(--grey-600) 62%, #ffffff);
     --line: color-mix(in srgb, var(--grey-400) 55%, #ffffff);
     --dot: color-mix(in srgb, var(--grey-400) 60%, #ffffff);
@@ -135,6 +137,7 @@
     --flag-soft: color-mix(in srgb, var(--orange-200) 55%, #ffffff);
     --red-600: #d92d20;   /* functional, not brand — the ramp has no red */
     --crit: var(--red-600);
+    --crit-text: #b42318;   /* red text on the pale red pill; Red 600 is 4.3:1 there */
     --crit-soft: color-mix(in srgb, var(--red-600) 8%, #ffffff);
 
     /* Dedicated to the two stock-cover alert cards only — brighter than the
@@ -267,6 +270,7 @@
       --flag-fill: var(--orange-600);
       --flag-soft: #3a2610;
       --crit: #ff9086;
+      --crit-text: var(--crit);
       --crit-soft: #3a1614;
 
       --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .38);
@@ -332,6 +336,7 @@
     --flag-fill: var(--orange-600);
     --flag-soft: #3a2610;
     --crit: #ff9086;
+    --crit-text: var(--crit);
     --crit-soft: #3a1614;
 
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .38);
@@ -373,7 +378,7 @@
     letter-spacing: .085em;
     font-size: var(--fs-label);
     font-weight: var(--w-semi);
-    color: var(--faint);
+    color: var(--muted);
   }
 
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2423,8 +2428,15 @@
   .chk-sel { font-size: var(--fs-xs); padding: 3px 9px; max-width: 100%; }
 
   .scroll { overflow-x: auto; }
+  /* A table wider than its panel scrolls sideways; keyboard users reach that
+     by focusing the region, so the focus has to be visible. */
+  .scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .sr-only {
+    position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-weight: var(--w-semi); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: .07em; color: var(--faint); background: var(--surface-2); padding: 10px 14px; white-space: nowrap; position: sticky; top: 0; }
+  th { text-align: left; font-weight: var(--w-semi); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--surface-2); padding: 10px 14px; white-space: nowrap; position: sticky; top: 0; }
   /* Tables run to a dozen columns, so they set their own type scale a step
      below the body rather than inheriting it — the controls inside the cells
      come with it, or a 13px select would set the row height on its own. */
@@ -2462,7 +2474,7 @@
   .pill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid; border-radius: var(--r-pill); padding: 2px 8px; font-size: var(--fs-label); font-weight: var(--w-semi); white-space: nowrap; }
   .p-good { background: var(--good-soft); color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
   .p-flag { background: var(--flag-soft); color: var(--flag); border-color: color-mix(in srgb, var(--flag) 30%, transparent); }
-  .p-crit { background: var(--crit-soft); color: var(--crit); border-color: color-mix(in srgb, var(--crit) 30%, transparent); }
+  .p-crit { background: var(--crit-soft); color: var(--crit-text); border-color: color-mix(in srgb, var(--crit) 30%, transparent); }
   /* Not a fault, so not red — work waiting on the planner, in the same colour
      as the button that does it. */
   .p-act { background: var(--hi-soft); color: var(--hi); border-color: color-mix(in srgb, var(--hi) 30%, transparent); }
@@ -5270,6 +5282,7 @@
     m.classList.toggle('wide-flush', state.step === PAGE_ITEMS);
     m.classList.toggle('grid-page', state.step === PAGE_ITEMS || state.step === STEP_ITEMS);
     m.innerHTML = stepperHtml() + body;
+    a11yTables(m);
     wire();
     renderDrawer();
     renderStockDrawer();
@@ -9329,6 +9342,56 @@ ${unitBoardHtml()}
 
     document.addEventListener('keydown', escClose);
   }
+
+  // Every table is built as a template string in a dozen places, so the
+  // semantics a screen reader needs are added in one pass after each render
+  // rather than repeated in each: a name for the table, column scope, a label
+  // for header cells that hold only a button, the material cell as the row
+  // header, and a focusable region around tables that scroll sideways.
+  function a11yTables(root) {
+    const pageTitle = (root.querySelector('h1, .head h2') || {}).textContent || '';
+    // Pages titled with an h1 and no h2 put their panels at h3, which skips a
+    // level for a screen reader's heading list. Announced as level 2 instead.
+    if (root.querySelector('h1') && !root.querySelector('h2')) {
+      root.querySelectorAll('.panel-h h3').forEach(h => { h.setAttribute('role', 'heading'); h.setAttribute('aria-level', '2'); });
+    }
+    root.querySelectorAll('table').forEach(t => {
+      if (!t.getAttribute('aria-label') && !t.getAttribute('aria-labelledby') && !t.querySelector('caption')) {
+        const box = t.closest('.panel, .co-box, .drawer');
+        // Never a heading from inside the table itself — an expanded row can
+        // carry its own label, and that names the nested table, not this one.
+        const h = box && [...box.querySelectorAll('.panel-h h3, h3, .label')].find(x => !t.contains(x));
+        const name = (h ? h.textContent : pageTitle).replace(/\s+/g, ' ').trim();
+        if (name) t.setAttribute('aria-label', name);
+      }
+      t.querySelectorAll('thead th').forEach(th => {
+        if (!th.hasAttribute('scope')) th.setAttribute('scope', 'col');
+        if (!th.textContent.trim() && !th.querySelector('input, button, .sr-only')) {
+          const col = th.cellIndex;
+          const cell = t.querySelector(`tbody tr:not(.co-row):not(.fixrow) > :nth-child(${col + 1})`);
+          const what = cell && cell.querySelector('.xbtn') ? 'Details'
+            : cell && cell.querySelector('input[type=checkbox]') ? 'Select' : 'Actions';
+          th.insertAdjacentHTML('beforeend', `<span class="sr-only">${what}</span>`);
+        }
+      });
+      t.querySelectorAll('tbody tr').forEach(tr => {
+        const code = [...tr.children].find(td => td.querySelector(':scope > .cell-code'));
+        if (code && code.tagName === 'TD' && !code.hasAttribute('role')) code.setAttribute('role', 'rowheader');
+      });
+      const wrap = t.closest('.scroll');
+      if (wrap && wrap.scrollWidth > wrap.clientWidth + 1) {
+        wrap.tabIndex = 0;
+        wrap.setAttribute('role', 'region');
+        wrap.setAttribute('aria-label', `${t.getAttribute('aria-label') || 'Table'} — scrolls sideways`);
+      }
+    });
+  }
+
+  // The drawers draw their own tables outside #main, on their own schedule.
+  ['#drawerHost', '#stockHost', '#reqHost'].forEach(sel => {
+    const host = document.querySelector(sel);
+    if (host) new MutationObserver(() => a11yTables(host)).observe(host, { childList: true, subtree: true });
+  });
 
   function escClose(e) { if (e.key === 'Escape') closeDrawer(); }
   function closeDrawer() {

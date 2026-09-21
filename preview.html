@@ -6305,7 +6305,7 @@
           </td>
           <td class="r num col-val" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-bold)"' : ''}>${fmt(bal)}</td>
           <td class="r" style="white-space:nowrap">
-            ${bal > 0 ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}">Raise PR</button>` : '<span class="pill p-good">Fully raised</span>'}
+            ${bal > 0 ? rowRaiseBtn(b) : '<span class="pill p-good">Fully raised</span>'}
           </td>
         </tr>`;
     };
@@ -9384,7 +9384,7 @@ ${unitBoardHtml()}
     if (!b) return '';
     const bal = balanceOf(b);
     return bal > 0
-      ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}" aria-label="Raise a PR for ${esc(code)}">Raise PR</button>`
+      ? rowRaiseBtn(b)
       : '<span class="pill p-good">Fully raised</span>';
   }
 
@@ -9727,7 +9727,7 @@ ${unitBoardHtml()}
                       <td class="r num">${b ? fmt(raisedFor(b.id)) : '<span class="muted">\u2014</span>'}</td>
                       <td class="r num" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${b ? fmt(bal) : '<span class="muted">\u2014</span>'}</td>
                       <td class="r" style="white-space:nowrap">${b && bal > 0 && r.approval === 'approve'
-                        ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}">Raise PR</button>`
+                        ? rowRaiseBtn(b)
                         : b ? '<span class="pill p-good">Fully raised</span>' : ''}</td>
                     </tr>`;
                   }).join('')}</tbody>
@@ -10429,6 +10429,13 @@ ${unitBoardHtml()}
   // A checkbox on every line. One that cannot be raised — not approved yet,
   // rejected, or fully raised — is greyed out with the reason on hover.
   const selectable = bs => bs.filter(b => b && balanceOf(b) > 0).map(b => b.id);
+  // A ticked line is raised with the others through "Raise PR for selected",
+  // so its own button stands down until it is unticked.
+  function rowRaiseBtn(b) {
+    if (state.prSel.includes(b.id)) return `<button class="btn btn-s" disabled
+      title="Selected — raise it with Raise PR for selected, or untick it">Raise PR</button>`;
+    return `<button class="btn btn-s btn-p" data-co="${esc(b.id)}" aria-label="Raise a PR for ${esc(b.code)}">Raise PR</button>`;
+  }
   function selCell(b, why) {
     if (!b || balanceOf(b) <= 0) {
       const t = why || (b ? 'Fully raised' : 'Available once the approver has approved this line');

@@ -2462,7 +2462,9 @@
 
   .cover-d { display: block; font-size: var(--fs-micro); color: var(--faint); font-weight: var(--w-reg); }
 
-  .cell-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-label); }
+  /* Inter like the rest of the table; tabular figures keep codes of the same
+     length lining up, and the weight lets the code lead its description. */
+  .cell-code { font-family: inherit; font-size: var(--fs-sm); font-weight: var(--w-med); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
   /* A code that goes somewhere. Underlined rather than coloured, so a column of
      them does not turn the table into a wall of links. */
   .fglink {

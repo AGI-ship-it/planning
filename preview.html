@@ -6280,7 +6280,7 @@
       const k = bal <= 0 ? 'full' : raised > 0 ? 'part' : 'need';
       return `
         <tr>
-          ${selCell(b)}
+          ${selCell(b, null, showSel)}
           <td style="max-width:34ch">
             <div class="cell-code">${esc(b.code)}</div>
             <div class="cell-desc">${esc(b.desc)}</div>
@@ -6311,6 +6311,7 @@
     };
     const lines = mineBook.filter(hit).slice().sort((x, y) =>
       (balanceOf(y) > 0) - (balanceOf(x) > 0) || new Date(y.at) - new Date(x.at));
+    const showSel = selectable(lines).length > 0;
 
     return `
       <div class="pofilter">
@@ -6348,11 +6349,11 @@
             <p>Every line the approver said yes to, what is on a PR against it so far and the balance. A line can take as
                many PRs as it needs — use Raise PR on a line, or tick the lines you want and raise those.</p>
           </div>
-          ${selButton(selectable(lines))}
+          ${selButton(selectable(lines), showSel)}
         </div>
         <div class="scroll"><table>
           <thead><tr>
-            ${selHead(selectable(lines))}<th>Material</th><th>Status</th><th>Supplier</th><th>Approved</th><th class="r">Requirement</th>
+            ${selHead(selectable(lines), showSel)}<th>Material</th><th>Status</th><th>Supplier</th><th>Approved</th><th class="r">Requirement</th>
             <th class="r">PR raised</th><th class="r col-val">Balance</th><th></th>
           </tr></thead>
           <tbody>${lines.map(lineRow).join('')}</tbody>
@@ -9526,17 +9527,18 @@ ${unitBoardHtml()}
 
       ${Object.entries(byUnit).sort().map(([u, rows]) => {
         const sel = selectable(rows.filter(o => (approvalOf(o.l.m.code) || {}).kind === 'approve').map(o => bookFor(o.l.m.code)));
+        const showSel = sel.length > 0 || rows.some(o => !approvalOf(o.l.m.code));
         return `
         <div class="panel">
           <div class="panel-h">
             <div><h3>${u} — ${esc(UNITS.find(x => x.code === u)?.name || '')}</h3><p>${rows.length} lines · ${aed(rows.reduce((a, o) => a + o.qty * o.l.m.price, 0))}</p></div>
-            ${selButton(sel)}
+            ${selButton(sel, showSel)}
           </div>
           <div class="scroll"><table>
-            <thead><tr>${selHead(sel)}<th>Material</th><th class="r">Suggested</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th>Expected arrival</th><th class="r col-val">Value</th><th>Status</th><th></th><th></th></tr></thead>
+            <thead><tr>${selHead(sel, showSel)}<th>Material</th><th class="r">Suggested</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th>Expected arrival</th><th class="r col-val">Value</th><th>Status</th><th></th><th></th></tr></thead>
             <tbody>${rows.map(o => `<tr>
               ${selCell((approvalOf(o.l.m.code) || {}).kind === 'approve' ? bookFor(o.l.m.code) : null,
-                (approvalOf(o.l.m.code) || {}).kind === 'reject' ? 'Rejected — cannot be raised' : null)}
+                (approvalOf(o.l.m.code) || {}).kind === 'reject' ? 'Rejected — cannot be raised' : null, showSel)}
               <td><div class="cell-code">${esc(o.l.m.code)}</div><div class="cell-desc">${esc(o.l.m.desc)}</div></td>
               <td class="r num muted">${fmt(o.l.prQty)}</td>
               <td class="r num" style="font-weight: var(--w-semi)">${fmt(o.qty)}</td>
@@ -9575,7 +9577,7 @@ ${unitBoardHtml()}
                   title="${on ? 'Hide the working' : 'Show the working'}">${CHEV}</button></td>`;
               })()}
             </tr>
-            ${state.ordOpen === o.l.m.code ? `<tr class="fixrow"><td colspan="11">${orderWorkingHtml(o)}</td></tr>` : ''}`).join('')}</tbody>
+            ${state.ordOpen === o.l.m.code ? `<tr class="fixrow"><td colspan="${showSel ? 11 : 10}">${orderWorkingHtml(o)}</td></tr>` : ''}`).join('')}</tbody>
           </table></div>
         </div>`; }).join('')}
       <div class="step-bar">
@@ -9708,17 +9710,18 @@ ${unitBoardHtml()}
                 </ol>
                 ${(o.rows || []).length ? (() => {
                   const olSel = selectable(o.rows.filter(r => r.approval === 'approve').map(r => o.apRef ? state.book.find(x => x.id === `${o.apRef}-${r.code}`) : null));
+                  const olShow = olSel.length > 0 || o.rows.some(r => !r.approval);
                   return `<div class="rowflex" style="justify-content:space-between;margin-bottom:6px">
                   <div class="label">The lines, with what is on a PR against each</div>
-                  ${selButton(olSel)}
+                  ${selButton(olSel, olShow)}
                 </div>
                 <div class="scroll"><table>
-                  <thead><tr>${selHead(olSel)}<th>Material</th><th>Approval</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th></th></tr></thead>
+                  <thead><tr>${selHead(olSel, olShow)}<th>Material</th><th>Approval</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th></th></tr></thead>
                   <tbody>${o.rows.map(r => {
                     const b = o.apRef ? state.book.find(x => x.id === `${o.apRef}-${r.code}`) : null;
                     const bal = b ? balanceOf(b) : null;
                     return `<tr>
-                      ${selCell(r.approval === 'approve' ? b : null, r.approval === 'reject' ? 'Rejected — cannot be raised' : null)}
+                      ${selCell(r.approval === 'approve' ? b : null, r.approval === 'reject' ? 'Rejected — cannot be raised' : null, olShow)}
                       <td style="max-width:34ch"><div class="cell-code">${esc(r.code)}</div><div class="cell-desc">${esc(r.desc || '')}</div></td>
                       <td>${r.approval === 'approve' ? '<span class="pill p-good">Approved</span>'
                         : r.approval === 'reject' ? `<span class="pill p-crit">Rejected</span><div class="cell-desc">${esc(r.reason || 'no reason given')}</div>`
@@ -9885,6 +9888,7 @@ ${unitBoardHtml()}
     const bk = planBook();
     const balVal = bk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
     const apSel = answered ? selectable(app.map(o => bookFor(o.l.m.code))) : [];
+    const apShow = apSel.length > 0 || !answered;
 
     return `
       <div class="head">
@@ -9931,11 +9935,11 @@ ${unitBoardHtml()}
               ? `As answered on ${esc(req.ref)}. A PR does not have to cover the whole line: raise part of it now and the balance stays here for the next PR.`
               : req ? `As sent in ${esc(req.ref)}. The approver's answer is the Status column.` : 'What the email will list once it is sent from the order list.'}</p>
           </div>
-          ${selButton(apSel)}
+          ${selButton(apSel, apShow)}
         </div>
         <div class="scroll"><table>
           <thead><tr>
-            ${selHead(apSel)}<th>Material</th><th class="r">Requirement</th><th class="r col-val">Value</th>
+            ${selHead(apSel, apShow)}<th>Material</th><th class="r">Requirement</th><th class="r col-val">Value</th>
             <th>Status</th><th>Answered by</th><th class="r">PR raised</th><th class="r">Balance</th><th></th>
           </tr></thead>
           <tbody>
@@ -9943,7 +9947,7 @@ ${unitBoardHtml()}
             ${orders.map(o => {
               const a = approvalOf(o.l.m.code);
               return `<tr>
-                ${selCell(a && a.kind === 'approve' ? bookFor(o.l.m.code) : null, a && a.kind === 'reject' ? 'Rejected — cannot be raised' : null)}
+                ${selCell(a && a.kind === 'approve' ? bookFor(o.l.m.code) : null, a && a.kind === 'reject' ? 'Rejected — cannot be raised' : null, apShow)}
                 <td style="max-width:46ch">
                   <div class="cell-code">${esc(o.l.m.code)}</div>
                   <div class="cell-desc">${esc(o.l.m.desc)}</div>
@@ -10387,21 +10391,27 @@ ${unitBoardHtml()}
       title="Selected — raise it with Raise PR for selected, or untick it">Raise PR</button>`;
     return `<button class="btn btn-s btn-p" data-co="${esc(b.id)}" aria-label="Raise a PR for ${esc(b.code)}">Raise PR</button>`;
   }
-  function selCell(b, why) {
-    if (!b || balanceOf(b) <= 0) {
-      const t = why || (b ? 'Fully raised' : 'Available once the approver has approved this line');
+  // `show` is false for a table with nothing left to raise — no column at all.
+  function selCell(b, why, show = true) {
+    if (!show) return '';
+    // A fully raised line has nothing to select, so it has no checkbox.
+    if (b && balanceOf(b) <= 0) return '<td style="width:34px"></td>';
+    if (!b) {
+      const t = why || 'Available once the approver has approved this line';
       return `<td style="width:34px"><input type="checkbox" disabled title="${esc(t)}" aria-label="${esc(t)}"></td>`;
     }
     return `<td style="width:34px"><input type="checkbox" data-prsel="${esc(b.id)}" ${state.prSel.includes(b.id) ? 'checked' : ''}
       aria-label="Select ${esc(b.code)} to raise a PR"></td>`;
   }
-  function selHead(ids) {
+  function selHead(ids, show = true) {
+    if (!show) return '';
     if (!ids.length) return `<th style="width:34px"><input type="checkbox" disabled aria-label="No line can be raised yet" title="No line can be raised yet"></th>`;
     const all = ids.every(id => state.prSel.includes(id));
     return `<th style="width:34px"><input type="checkbox" data-prsel-all="${esc(ids.join(','))}" ${all ? 'checked' : ''}
       aria-label="Select every line that can be raised"></th>`;
   }
-  function selButton(ids) {
+  function selButton(ids, show = true) {
+    if (!show) return '';
     const n = state.prSel.filter(id => ids.includes(id)).length;
     return `<div class="rowflex" style="gap:10px;flex-wrap:nowrap;flex-shrink:0;white-space:nowrap">
       <span class="muted" style="font-size: var(--fs-xs)">${!ids.length ? 'Lines can be raised once approved'

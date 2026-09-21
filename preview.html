@@ -2298,7 +2298,7 @@
      out through them. Sized off the viewport so the whole composition fits a
      laptop screen without scrolling. */
   .runradar {
-    --radar: clamp(320px, 50vh, 470px);
+    --radar: clamp(220px, 32vh, 300px);
     position: relative; width: var(--radar); height: var(--radar);
     margin: 0 auto; display: grid; place-items: center;
   }
@@ -2360,10 +2360,15 @@
   }
   .rr-pct {
     font-size: var(--fs-mega); font-weight: var(--w-bold); letter-spacing: -.035em; line-height: 1;
-    color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 6px;
+    color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 4px;
   }
-  .rr-pct span { font-size: var(--fs-2xl); font-weight: var(--w-semi); margin-left: 1px; }
-  .rr-tick { color: var(--good); font-size: var(--fs-mega); }
+  /* Sized to the smaller ring rather than the display scale. */
+  .runradar .rr-pct { font-size: clamp(32px, 5vh, 44px); }
+  .rr-pct span { font-size: var(--fs-lg); font-weight: var(--w-semi); margin-left: 1px; }
+  .rr-tick { color: var(--good); font-size: clamp(32px, 5vh, 44px); }
+  .runtitle { text-align: center; margin: 0 0 18px; }
+  .runtitle h2 { margin: 0; font-size: var(--fs-xl); font-weight: var(--w-semi); letter-spacing: -.015em; }
+  .runtitle p { margin: 4px 0 0; color: var(--muted); font-size: var(--fs-sm); }
   .runradar.is-done .rr-pct { color: var(--good); }
   .rr-sub { font-size: var(--fs-xs); color: var(--muted); margin-top: 6px; }
 
@@ -4350,8 +4355,10 @@
     // upload this plant has ever accepted, with the plan it belonged to.
     fcLog: [],                // see FC_KEY
     prs: [],                  // purchase requests raised against them
-    callOff: {},              // code -> how much of the requirement goes on the first PR
-    coOpen: null,             // which book line has its raise-balance row open
+    // The book line the Create PR screen is raising against, and the screen to
+    // go back to if the planner cancels. { id, back }
+    newPr: null,
+    prSel: [],                // approved lines ticked to raise together
     // Which order line is showing its working on the PR page. The trail already
     // exists in the review drawer, but by the time the PR is raised the question
     // has changed — not "why this quantity" but "why is only part of it on the
@@ -4375,17 +4382,12 @@
     runNo: 0,                 // planning runs so far, so each has a number to be cited by
     runLog: [],               // one entry per completed run — see RUN_KEY
     runDrawer: null,    // which run's timeline is open in the drawer
-    olOpen: null,
+    olOpen: null,       // which order list is expanded; null = the newest, '' = none
     fcOpen: null,       // which uploaded file is expanded on the versions page       // which order list in the log is expanded            // which run has its detail expanded
     // Which rail item you arrived by, when the screen belongs to more than one.
     // Cleared by any move through the cycle, so it only ever describes the trip
     // that is still in progress.
     navRoute: null,
-    // What has been written to Dynamics for this cycle, if anything:
-    // { ref, at, sig, count }. sig is the signature of the order list at the
-    // moment it was written, which is how a later edit is detected as an update
-    // rather than a first save.
-    d365: null,   // true = show mapping and row checks again after accepting
     // Stock and open orders arrive over the daily Synapse Link sync, not from
     // this page — so the dashboard has a fetch to wait on. Held here and
     // cleared on a timer, standing in for that request.
@@ -4451,7 +4453,7 @@
     // null = every tag. The tag is the first thing a planner narrows by, because
     // it is what decides whether a line is planned at all.
     imTagFilter: null,
-    stockDrawer: null,   // 'fg' | 'rm' | 'pm' | null
+    stockDrawer: null,   // 'rm' | 'pm' | 'ch' | 'accuracy' | null
     pTrigger: 'close',
     simulate: false,
     wasSimulation: false,
@@ -4493,6 +4495,11 @@
   // all of them and where each one ended up — most end up superseded, which
   // nothing in the app could say before.
   const PAGE_ORDERLOG = 27;
+  // One PR against one approved line, for as much of it as the planner raises
+  // now. A screen of its own (review of 16 Sept 2026) rather than a row that
+  // opens in a table, because the quantity is the decision and the rest of the
+  // list is not part of it.
+  const PAGE_NEWPR = 28;
   const isPage = n => n >= PAGE_METRICS;
 
   // A readable name per page number, kept beside the numbers themselves. The
@@ -4506,7 +4513,8 @@
     [PAGE_CALLOFFS]: 'PR status',
     [PAGE_ITEMS]: 'Item master',
     [PAGE_RUNS]: 'Planning runs',
-    [PAGE_ORDERLOG]: 'Order lists'
+    [PAGE_ORDERLOG]: 'Order lists',
+    [PAGE_NEWPR]: 'Raise PR'
   };
 
   const STEPS = [
@@ -4518,7 +4526,6 @@
     // named for the job — check the rules and numbers this run will use —
     // rather than for the table it happens to be.
     { n:STEP_ITEMS,    t:'Review MRP items', s:'The rule each material uses' },
-    { n:STEP_RUN,      t:'Calculate',   s:'Work out what to buy' },
     // Two screens, one step: the lines that need a call, then the list they
     // add up to. Splitting them made the planner press Continue to reach a list
     // their own decisions had just written — the same mistake import and
@@ -4526,16 +4533,19 @@
     { n:STEP_REVIEW,   t:'Review order list', s:'Check what needs a call' },
     // Approval is not the planner signing their own work off: the order list
     // is what this cycle asks for, and this is the second pair of eyes on the
-    // money before any of it reaches Dynamics.
-    { n:STEP_APPROVE,  t:'Approval',    s:'Approve and send on' }
+    // money before any of it reaches Dynamics. PRs are created here, one line
+    // at a time, once a line is approved.
+    { n:STEP_APPROVE,  t:'Approval',    s:'Approve, then raise PRs' }
   ];
+  // Which circle a screen lights. The order list and the calculation keep
+  // their own step numbers so every data-step, rail route and stored step
+  // still resolves, but neither is a step of its own: the calculation is
+  // processing, not a task, so it lights the review it is producing.
+  const trackOf = n => n === STEP_ORDERS || n === STEP_RUN ? STEP_REVIEW : n;
   // Position in the cycle, not the raw constant — the numbers on the track have
   // to read 1..4 whatever the underlying step ids happen to be.
-  const stepNo = n => STEPS.findIndex(x => x.n === n) + 1;
-  // Which circle is lit. The order list has its own step number so that every
-  // data-step, rail route and stored step still resolves, but it is not a step
-  // of its own any more, so it lights the one it belongs to.
-  const trackStep = () => state.step === STEP_ORDERS ? STEP_REVIEW : state.step;
+  const stepNo = n => STEPS.findIndex(x => x.n === trackOf(n)) + 1;
+  const trackStep = () => trackOf(state.step);
 
   // A planner is assigned one business unit. Every other unit is visible but
   // read-only — never hidden, so they can see a plant exists and that it is not
@@ -4817,7 +4827,7 @@
       ${STEPS.map(st => {
         const done = stepDone(st.n);
         const cur = st.n === trackStep();
-        const locked = st.n > state.maxStep;
+        const locked = st.n > state.maxStep && !cur;
         return `<li class="stp ${done ? 'done' : ''} ${cur ? 'cur' : ''} ${locked ? 'lock' : ''}">
           <button class="stp-b" ${locked ? 'disabled' : ''} data-step="${st.n}"
             aria-current="${cur}" aria-label="Step ${stepNo(st.n)}, ${st.t}${done ? ', done' : locked ? ', not yet available' : ''}">
@@ -4832,10 +4842,10 @@
 
   function stepDone(n) {
     if (n === STEP_FORECAST) return !!state.forecast;
-    if (n === STEP_ITEMS) return !!state.forecast && state.maxStep > STEP_ITEMS;
+    if (n === STEP_ITEMS) return !!state.forecast && (state.maxStep > STEP_ITEMS || !!state.run);
     if (n === STEP_RUN) return !!(state.run && state.run.done);
     if (n === STEP_REVIEW) return state.lines != null && state.maxStep > STEP_REVIEW;
-    if (n === STEP_APPROVE) return !!state.d365 && !d365Dirty();
+    if (n === STEP_APPROVE) return cycleState().k === 'closed';
     return false;
   }
 
@@ -4904,9 +4914,11 @@
     archiveCycle();
     // Everything the closing plan left unfinished is superseded, not forgotten.
     // With plans running whenever they need to, this is the normal ending for
-    // an order list and the one the app could not say out loud before.
+    // an order list and the one the app could not say out loud before. A list
+    // the approver has answered is not unfinished: its approved lines are
+    // demand, and their balances stay open for PRs in the next plan.
     state.orderLog.forEach(o => {
-      if (o.unit === state.myUnit && o.status !== 'raised' && o.status !== 'superseded') {
+      if (o.unit === state.myUnit && (o.status === 'draft' || o.status === 'sent')) {
         o.status = 'superseded';
         o.supersededAt = new Date();
       }
@@ -4919,14 +4931,14 @@
     state.raw = null; state.map = null; state.fileName = null; state.fcShowMap = false;
     state.fcFix = {}; state.fcFixSaved = '{}';
     state.fcAdj = {}; state.fcAdjOpen = null; state.fcNew = [];
-    state.lines = null; state.run = null; state.d365 = null;
+    state.lines = null; state.run = null;
     state.approvals = {}; state.approvalReq = null;
     state.simulate = false; state.wasSimulation = false;
-    state.callOff = {}; state.coOpen = null; state.coDraft = {};
+    state.newPr = null; state.prSel = []; state.coDraft = {};
     state.maxStep = STEP_FORECAST; state.step = STEP_FORECAST;
     saveCycle();
     showToast({ tone:'good', t:`${cycleName()} is open`,
-      s:'The last plan is on the record and its requisitions are unchanged. Any balance still to raise came across with it. There is no limit on how often you plan \u2014 at least once a month, as often as you need.' }, 10000);
+      s:'The last plan is on the record and its requisitions are unchanged. Any approved line with a balance still to raise came across with it. There is no limit on how often you plan \u2014 at least once a month, as often as you need.' }, 10000);
     render();
     window.scrollTo(0, 0);
   }
@@ -4934,20 +4946,18 @@
   function cycleState() {
     if (!state.forecast) return { k:'not-started', title:'Not started', detail:'The forecast from Sales has not been loaded yet.', cta:'Start the cycle', step:STEP_FORECAST };
     if (!state.run || !state.run.done) return { k:'ready-to-run', title:'Forecast loaded', detail:`Version ${state.forecastVersion} is locked and ready. The requirement engine has not run.`, cta:'Review the items', step:STEP_ITEMS };
-    // The requisitions have gone to Dynamics, so this cycle has nothing left to
-    // ask of the planner. Sending them back into it — "see the order list", for
-    // the rest of the month — is a loop with no way out; the next thing after a
-    // closed cycle is the next cycle.
-    if (state.d365) {
-      const bal = openBook().length;
-      return { k:'closed', title:`${cycleName()} is closed`,
-               detail: bal
-                 ? `${state.d365.refs.length} requisition${state.d365.refs.length === 1 ? '' : 's'} in Dynamics · ${aedM(openValue())} still to raise a PR for.`
-                 : `${state.d365.refs.length} requisition${state.d365.refs.length === 1 ? '' : 's'} in Dynamics. Nothing outstanding.`,
-               cta:'Start the next plan', step:STEP_ORDERS, next:true };
-    }
     const f = flagged(), orders = buildOrders();
     const waiting = orders.filter(o => !state.approvals[o.l.m.code]).length;
+    // Answered, and every approved line is fully on a PR, so this plan has
+    // nothing left to ask of the planner. The next thing is the next plan.
+    if (state.approvalReq && !waiting && !planBook().some(b => balanceOf(b) > 0)) {
+      const n = planPrs().length;
+      return { k:'closed', title:`${cycleName()} is closed`,
+               detail: n
+                 ? `${n} PR${n === 1 ? '' : 's'} raised against the approved lines. Nothing outstanding.`
+                 : 'Nothing on this plan was approved, so there was nothing to raise.',
+               cta:'Start the next plan', step:STEP_APPROVE, next:true };
+    }
     if (state.maxStep < STEP_APPROVE) {
       return { k:'review', title:`${f.length} line${f.length === 1 ? '' : 's'} worth a look`,
                detail:`${cleared().length} lines cleared every tolerance. The whole list of ${orders.length} carries through either way.`,
@@ -4961,7 +4971,10 @@
     if (waiting) return { k:'review', title:`Waiting on ${state.approvalReq.to}`,
                           detail:`${state.approvalReq.ref} went out on ${dStamp(state.approvalReq.at)}. Their answer arrives over the API \u2014 nothing reaches Dynamics until it does.`,
                           cta:'Check for a reply', step:STEP_APPROVE };
-    return { k:'complete', title:'Approved and ready to send', detail:`${state.approvalReq.to} answered all ${orders.length} lines. ${cleared().length} cleared automatically on the way here.`, cta:'Send to Dynamics', step:STEP_APPROVE };
+    const need = planBook().filter(b => balanceOf(b) > 0);
+    return { k:'complete', title:`${need.length} approved line${need.length === 1 ? '' : 's'} to create a PR for`,
+             detail:`${state.approvalReq.to} answered all ${orders.length} lines. Raise a PR against each approved line, for as much of it as you need now — ${aedM(need.reduce((a, b) => a + balanceOf(b) * b.price, 0))} not on a PR yet.`,
+             cta:'Raise PRs', step:STEP_APPROVE };
   }
 
   function go(n, route) {
@@ -5058,20 +5071,18 @@
   // a badge that goes up when work completes is a badge nobody reads.
   function doneNotes() {
     const out = [];
-    if (state.d365) {
-      const at = state.d365.at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-      const n = state.d365.refs.length;
-      // Whether it went out whole matters as much as that it went out. A plain
-      // "raised" on a cycle that only part-ordered reads as finished, and the
-      // balance then sits on the book with nothing having said so.
-      const part = openBook().length;
+    const made = planPrs();
+    if (made.length) {
+      const last = made.reduce((a, r) => (new Date(r.at) > new Date(a.at) ? r : a));
+      // Whether the plan is fully on PRs matters as much as that PRs went out.
+      // A plain "raised" on a plan that is only part-raised reads as finished.
+      const part = planBook().filter(b => balanceOf(b) > 0).length;
       out.push({ tone: part ? 'flag' : 'good',
-                 t:`${n} requisition${n === 1 ? '' : 's'} raised in D365${part ? ' \u2014 partly ordered' : ''}`,
+                 t:`${made.length} PR${made.length === 1 ? '' : 's'} raised this plan${part ? ' \u2014 more to create' : ''}`,
                  s: part
-                   ? `${fmt(state.d365.count)} lines sent at ${at}. ${part} line${part === 1 ? '' : 's'} went out for less than the requirement \u2014 ${aedM(openValue())} still to raise.`
-                   : `${fmt(state.d365.count)} lines across ${n} supplier${n === 1 ? '' : 's'}, sent automatically at ${at}${state.d365.version > 1 ? ` · updated ${state.d365.version - 1}\u00d7 since` : ''}`,
-                 step: part ? PAGE_CALLOFFS : STEP_ORDERS,
-                 open: part === 1 ? openBook()[0].id : null });
+                   ? `Latest ${esc(last.ref)}. ${part} approved line${part === 1 ? ' still has' : 's still have'} a balance to raise.`
+                   : `Latest ${esc(last.ref)}. Every approved line is fully on a PR.`,
+                 step: PAGE_CALLOFFS });
     }
     return out;
   }
@@ -5082,12 +5093,12 @@
     const one = open.length === 1;
     // Carries the line itself, not just the page. Landing on a list and having
     // to find the row again is most of the work the notice was meant to save,
-    // so following it opens that line's raise form directly.
+    // so following it opens that line's Create PR screen directly.
     return { tone:'flag',
-             t:`${aedM(openValue())} still to raise`,
+             t:`${aedM(openValue())} approved, not on a PR yet`,
              s: one
-               ? `${esc(open[0].code)} went out for ${fmt(raisedFor(open[0].id))} of ${fmt(open[0].req)} ${open[0].uom}. Raise the remaining ${fmt(balanceOf(open[0]))}.`
-               : `${open.length} lines were only part-ordered. Raise the balance whenever the warehouse can take it.`,
+               ? `${esc(open[0].code)} has ${fmt(raisedFor(open[0].id))} of ${fmt(open[0].req)} ${open[0].uom} on a PR. Create one for the remaining ${fmt(balanceOf(open[0]))}.`
+               : `${open.length} approved lines still have a balance. Raise a PR for each whenever the warehouse can take it.`,
              step: PAGE_CALLOFFS,
              open: one ? open[0].id : null };
   }
@@ -5154,6 +5165,7 @@
     if (s === PAGE_SETTINGS) return 'set';
     if (s === PAGE_RUNS) return 'runs';
     if (s === PAGE_ORDERLOG) return 'demand';
+    if (s === PAGE_NEWPR) return 'po';
     if (s === PAGE_ITEMS) return 'items';
     // The order list is two things at once: the second half of the review step,
     // and the screen the rail's own Order list item opens. Handing it to that
@@ -5247,6 +5259,7 @@
       : state.step === STEP_FORECAST ? viewForecast()
       : state.step === PAGE_RUNS ? viewRuns()
       : state.step === PAGE_ORDERLOG ? viewOrderLog()
+      : state.step === PAGE_NEWPR ? viewNewPr()
       : state.step === PAGE_ITEMS || state.step === STEP_ITEMS ? viewItemMaster()
       : state.step === STEP_RUN ? viewRun()
       : state.step === STEP_REVIEW ? viewReview()
@@ -5298,7 +5311,7 @@
     if (go) go.onclick = () => {
       const step = t.step, open = t.open;
       dismissToast();
-      if (open) state.coOpen = open;
+      if (open) { openCreatePr(open, step); return; }
       if (step != null) { state.maxStep = Math.max(state.maxStep, step); go2(step); } else render();
     };
   }
@@ -6195,32 +6208,45 @@
       <section class="group">
         <div class="empty">
           ${emptyArt('box')}
-          <div class="empty-t">No requisitions yet</div>
-          <p class="empty-p">Finish a planning cycle and its requisitions land here, one per supplier, and Dynamics turns
-             each into a purchase order. Whatever is not raised straight away stays on this page as a balance until someone
-             raises a PR for it here — including across a month boundary, so a September balance can be raised in October.</p>
+          <div class="empty-t">No approved lines yet</div>
+          <p class="empty-p">Once the approver answers, every approved line lands here. Raise a PR against a line for as much of
+             it as you need now; whatever is not raised stays as a balance until the next PR — including across a month
+             boundary, so a September balance can be raised in October.</p>
           <button class="btn btn-p" data-step="0">Back to dashboard</button>
         </div>
       </section>`;
 
     // ---- a requisition, its status, and the lines on it
+    // What had been raised against a line up to and including this PR, so a
+    // second PR reads as "75,000 then 50,000 — 125,000 raised, 50,000 left".
+    const raisedThrough = (id, r) => state.prs
+      .filter(x => new Date(x.at) <= new Date(r.at))
+      .reduce((a, x) => a + x.lines.filter(l => l.id === id).reduce((c, l) => c + l.qty, 0), 0);
     const orderRow = r => {
       const isOpen = state.poOpen === r.ref;
       const qty = r.lines.reduce((a, l) => a + l.qty, 0);
       const st = prStatus(r);
+      const one = r.lines.length === 1 ? r.lines[0] : null;
+      const b = one ? state.book.find(x => x.id === one.id) : null;
+      const thru = b ? raisedThrough(b.id, r) : null;
       return `
         <tr>
           <td class="muted">${esc(dStamp(r.at))}</td>
-          <td><div class="cell-code">${esc(r.ref)}${r.demo ? ' <span class="pill p-mute">Example</span>' : ''}</div><div class="cell-desc">${r.first ? 'Raised with the cycle' : 'Raised against a pending balance'}</div></td>
+          <td><div class="cell-code">${esc(r.ref)}</div><div class="cell-desc">${r.seq ? `PR ${fmt(r.seq)} against this line` : r.first ? 'Raised with the cycle' : 'Raised against a balance'}</div></td>
+          <td style="max-width:30ch">${b
+            ? `<div class="cell-code">${esc(b.code)}</div><div class="cell-desc">${esc(b.desc || '')}</div>`
+            : `<span class="muted">${fmt(r.lines.length)} lines</span>`}</td>
           <td><span class="pill ${st.p}">${st.t}</span><div class="cell-desc">${st.d}</div></td>
           <td>${esc(r.supplier || 'Unassigned')}</td>
-          <td class="r num">${fmt(r.lines.length)}</td>
+          <td class="r num" style="font-weight: var(--w-semi)">${fmt(qty)}${b ? ` <span class="muted">${esc(b.uom || '')}</span>` : ''}</td>
+          <td class="r num">${b ? `${fmt(thru)}<div class="cell-desc">of ${fmt(b.req)}</div>` : '\u2014'}</td>
+          <td class="r num" ${b && b.req - thru > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${b ? fmt(Math.max(0, b.req - thru)) : '\u2014'}</td>
           <td class="r num col-val">${aed(valueOf(r))}</td>
           <td class="r"><button class="xbtn ${isOpen ? 'on' : ''}" data-po="${esc(r.ref)}"
             aria-expanded="${isOpen}" aria-label="${isOpen ? 'Hide' : 'Show'} the ${fmt(r.lines.length)} lines on ${esc(r.ref)}"
             title="${isOpen ? 'Hide the lines' : 'Show the lines'}">${CHEV}</button></td>
         </tr>
-        ${isOpen ? `<tr class="co-row"><td colspan="7"><div class="co-box">
+        ${isOpen ? `<tr class="co-row"><td colspan="10"><div class="co-box">
           <div class="trail">
             ${r.lines.map(l => {
               const b = state.book.find(x => x.id === l.id) || {};
@@ -6232,7 +6258,7 @@
                 <div>
                   <div class="t">${esc(l.code)}</div>
                   <div class="e">${esc(b.desc || '')}</div>
-                  ${bal > 0 ? `<div class="e" style="color:var(--flag)">${fmt(bal)} ${esc(b.uom || '')} of the ${fmt(b.req)} requirement is still to order</div>` : ''}
+                  ${bal > 0 ? `<div class="e" style="color:var(--flag)">${fmt(bal)} ${esc(b.uom || '')} of the ${fmt(b.req)} requirement is still to raise</div>` : ''}
                 </div>
                 <div class="v">
                   ${fmt(l.qty)} ${esc(b.uom || '')}
@@ -6246,78 +6272,45 @@
         </div></td></tr>` : ''}`;
     };
 
-    // ---- a requirement line that is only part-raised
-    const pendRow = b => {
+    // ---- an approved line: what it asked for, what is on a PR, what is left
+    const lineRow = b => {
       const raised = raisedFor(b.id), bal = balanceOf(b);
       const pct = b.req > 0 ? Math.round((raised / b.req) * 100) : 0;
-      const isOpen = state.coOpen === b.id;
-      const draft = state.coDraft[b.id] == null ? bal : state.coDraft[b.id];
-      const history = prsFor(b.id);
+      const n = prsFor(b.id).length;
+      const k = bal <= 0 ? 'full' : raised > 0 ? 'part' : 'need';
       return `
         <tr>
+          ${selCell(b)}
           <td style="max-width:34ch">
-            <div class="cell-code">${esc(b.code)}${b.demo ? ' <span class="pill p-mute">Example</span>' : ''}</div>
+            <div class="cell-code">${esc(b.code)}</div>
             <div class="cell-desc">${esc(b.desc)}</div>
           </td>
-          <td>${prPill('need')}<div class="cell-desc">${PR_STATUS.need.d}</div></td>
+          <td>${prPill(k)}<div class="cell-desc">${PR_STATUS[k].d}</div></td>
           <td>${esc(b.supplier || 'Unassigned')}</td>
-          ${/* When the balance was written, and how long it has been sitting.
-               A balance does not expire with its cycle, so age is the thing
-               that decides whether it still needs chasing. */ ''}
+          ${/* When the line was approved, and how long it has been sitting. A
+               balance does not expire with its plan, so age is the thing that
+               decides whether it still needs chasing. */ ''}
           ${(() => {
             const at = b.at ? new Date(b.at) : null;
             const days = at ? Math.floor((Date.now() - at.getTime()) / 86400000) : null;
             return `<td class="muted">${at ? esc(dStamp(at)) : '\u2014'}
-              ${days != null ? `<div class="cell-desc">${days === 0 ? 'today' : `${fmt(days)} day${days === 1 ? '' : 's'} ago`}</div>` : ''}
+              ${days != null ? `<div class="cell-desc">${esc(b.cycle || '')} · ${days === 0 ? 'today' : `${fmt(days)} day${days === 1 ? '' : 's'} ago`}</div>` : ''}
             </td>`;
           })()}
           <td class="r num">${fmt(b.req)} <span class="muted">${esc(b.uom)}</span></td>
           <td class="r num">
             ${fmt(raised)}
+            <div class="cell-desc">${n ? `${fmt(n)} PR${n === 1 ? '' : 's'}` : 'none yet'}</div>
             <div class="bar" style="margin-top:5px;width:74px;margin-left:auto"><i style="width:${pct}%"></i></div>
           </td>
-          <td class="r num col-val" style="color:var(--flag);font-weight: var(--w-bold)">${fmt(bal)}</td>
+          <td class="r num col-val" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-bold)"' : ''}>${fmt(bal)}</td>
           <td class="r" style="white-space:nowrap">
-            ${/* Keeps its label — it opens a form, not just more of the row —
-                 but not the filled treatment: magenta is the one thing to do on
-                 a screen, and an open form is not it. */ ''}
-            <button class="btn btn-s ${isOpen ? 'btn-o' : ''}" data-co="${esc(b.id)}">${isOpen ? 'Close' : 'Raise PR'}</button>
+            ${bal > 0 ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}">Raise PR</button>` : '<span class="pill p-good">Fully raised</span>'}
           </td>
-        </tr>
-        ${isOpen ? `
-        <tr class="co-row"><td colspan="8">
-          <div class="co-box">
-            <div class="co-form">
-              <label class="rowflex" style="gap:8px">
-                <span class="label" style="margin:0">Quantity on this PR</span>
-                <input type="number" class="co-in" data-co-in="${esc(b.id)}" value="${draft}" min="1" max="${bal}"
-                       style="width:140px" aria-label="Quantity to raise for ${esc(b.code)}">
-                <span class="muted">of ${fmt(bal)} ${esc(b.uom)} pending · ${esc(b.supplier || 'Unassigned')}</span>
-              </label>
-              <div class="rowflex">
-                <button class="btn btn-s btn-ghost" data-co-all="${esc(b.id)}">Use the full balance</button>
-                <button class="btn btn-p" data-co-go="${esc(b.id)}">Raise PR</button>
-              </div>
-            </div>
-            ${history.length ? `
-            <div style="margin-top:12px">
-              <div class="label" style="margin-bottom:6px">Already raised against this line</div>
-              <div class="trail">
-                ${history.map(r => {
-                  const q = r.lines.filter(x => x.id === b.id).reduce((a, x) => a + x.qty, 0);
-                  return `<div class="trail-row">
-                    <div>
-                      <div class="t">${esc(r.ref)}</div>
-                      <div class="e">${r.at.toLocaleDateString('en-GB', { day:'numeric', month:'short' })} ${r.at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })}${r.first ? ' · raised with the cycle' : ' · raised against the balance'}</div>
-                    </div>
-                    <div class="v">${fmt(q)} ${esc(b.uom)}</div>
-                  </div>`;
-                }).join('')}
-              </div>
-            </div>` : ''}
-          </div>
-        </td></tr>` : ''}`;
+        </tr>`;
     };
+    const lines = mineBook.filter(hit).slice().sort((x, y) =>
+      (balanceOf(y) > 0) - (balanceOf(x) > 0) || new Date(y.at) - new Date(x.at));
 
     return `
       <div class="pofilter">
@@ -6330,7 +6323,7 @@
         </label>
         <span class="rowflex" style="gap:12px">
           <span class="muted" style="font-size: var(--fs-xs)">
-            ${sup ? `${fmt(orders.length)} requisitions and ${fmt(pending.length)} balance lines for ${esc(sup)}` : 'One requisition per supplier — a cycle raises as many as it buys from'}
+            ${sup ? `${fmt(orders.length)} PRs and ${fmt(pending.length)} lines with a balance for ${esc(sup)}` : 'One PR per line — a line can take as many as it needs'}
           </span>
           ${waiting.length ? `<button class="btn btn-s btn-o" id="d365Sync">Check Dynamics (${fmt(waiting.length)} pending)</button>` : ''}
         </span>
@@ -6343,25 +6336,26 @@
       <div class="stats tight">
         <div class="stat ${orders.length ? 't-info' : 't-zero'}"><div class="v">${fmt(orders.length)}</div><div class="k label">Requisitions</div><div class="d">${aedM(orders.reduce((a, r) => a + valueOf(r), 0))} raised</div></div>
         <div class="stat ${converted.length ? 't-good' : 't-zero'}"><div class="v">${fmt(converted.length)}</div><div class="k label">PO issued</div><div class="d">${waiting.length ? `${fmt(waiting.length)} still pending` : orders.length ? 'All issued' : 'None yet'}</div></div>
-        <div class="stat ${pendVal > 0 ? 't-flag' : 't-zero'}"><div class="v">${aedM(pendVal)}</div><div class="k label">Need to raise PR</div><div class="d">${pending.length ? `${fmt(pending.length)} balance line${pending.length === 1 ? '' : 's'}` : 'Nothing left'}</div></div>
+        <div class="stat ${pendVal > 0 ? 't-flag' : 't-zero'}"><div class="v">${aedM(pendVal)}</div><div class="k label">Balance to raise</div><div class="d">${pending.length ? `${fmt(pending.length)} line${pending.length === 1 ? '' : 's'}` : 'Nothing left'}</div></div>
         <div class="stat ${settled.length ? 't-good' : 't-zero'}"><div class="v">${fmt(settled.length)}</div><div class="k label">Fully raised</div></div>
       </div>
 
-      ${pending.length ? `
+      ${lines.length ? `
       <div class="panel">
         <div class="panel-h">
           <div>
-            <h3>Need to raise PR</h3>
-            <p>This run raised part of the requirement. The rest sits here until someone raises a PR for it, which is done
-               on this page rather than in Dynamics, and it can go in as many requisitions as it takes.</p>
+            <h3>Approved lines</h3>
+            <p>Every line the approver said yes to, what is on a PR against it so far and the balance. A line can take as
+               many PRs as it needs — use Raise PR on a line, or tick the lines you want and raise those.</p>
           </div>
+          ${selButton(selectable(lines))}
         </div>
         <div class="scroll"><table>
           <thead><tr>
-            <th>Material</th><th>Status</th><th>Supplier</th><th>Opened</th><th class="r">Requirement</th>
-            <th class="r">Raised</th><th class="r col-val">Balance</th><th></th>
+            ${selHead(selectable(lines))}<th>Material</th><th>Status</th><th>Supplier</th><th>Approved</th><th class="r">Requirement</th>
+            <th class="r">PR raised</th><th class="r col-val">Balance</th><th></th>
           </tr></thead>
-          <tbody>${pending.map(pendRow).join('')}</tbody>
+          <tbody>${lines.map(lineRow).join('')}</tbody>
         </table></div>
       </div>` : ''}
 
@@ -6408,17 +6402,17 @@
            same fact is not a heading, it is noise. */ ''}
       <div class="panel">
         ${orders.length ? `<div class="scroll"><table>
-          <thead><tr><th>Date &amp; time</th><th>Requisition</th><th>Status</th><th>Supplier</th><th class="r">Lines</th><th class="r col-val">Value</th><th></th></tr></thead>
+          <thead><tr><th>Date &amp; time</th><th>PR</th><th>Material</th><th>Status</th><th>Supplier</th><th class="r">PR qty</th><th class="r">Total raised</th><th class="r">Balance</th><th class="r col-val">Value</th><th></th></tr></thead>
           <tbody>${orders.map(orderRow).join('')}</tbody>
         </table></div>`
         : `<div class="panel-b"><div class="note"><strong>Nothing here.</strong> No order has been raised for this supplier yet.</div></div>`}
       </div>
 
       <div style="margin-top:16px" class="note">
-        <strong>Three statuses, in order.</strong> <em>Need to raise PR</em> is a balance left on a part-raised line —
-        nothing covers it yet, and it is the only one the planner can act on, here rather than in Dynamics.
-        <em>Pending</em> is a requisition that has gone across and is waiting. <em>PO issued</em> is Dynamics having
-        converted it. The last two arrive back from Dynamics rather than being set here, which is why they are shown and
+        <strong>Two sets of statuses.</strong> A line is <em>Need to raise PR</em>, <em>Partly raised</em> or
+        <em>Fully raised</em> depending on how much of it is on a PR — the planner acts on it with Raise PR, here rather
+        than in Dynamics. A PR is <em>Pending</em> once it has gone across and is waiting, and <em>PO issued</em> once
+        Dynamics has converted it. The last two arrive back from Dynamics rather than being set here, which is why they are shown and
         not editable. The "Check Dynamics" button is a stand-in for that feed so a walkthrough can show the change;
         whether the real one is a poll or a callback is still open, as is whether an approval sits between the last two.
       </div>
@@ -6815,6 +6809,9 @@
     // The approver answered a list that no longer says the same thing, so the
     // request itself is void \u2014 a fresh one has to go out.
     if (stale.length) state.approvalReq = null;
+    // A line that lost its approval cannot take a new PR until it is approved
+    // again; what was already raised against it stays.
+    if (stale.length) registerDemand();
 
     if (stale.length) {
       const one = stale[0];
@@ -6975,10 +6972,6 @@
       return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([uom, q]) => `${fmt(q)} ${uom}`);
     };
 
-    const myFg = FG_STOCK.filter(g => g.unit === state.myUnit);
-    const fgVal = myFg.reduce((a, g) => a + g.qty * g.price, 0);
-    const fgOff = myFg.reduce((a, g) => a + g.offtake * g.price, 0);
-    const fgQty = byUom(myFg.map(g => [g.uom, g.qty]));
 
     const group = cats => {
       const ms = MATERIALS.filter(m => cats.includes(m.cat) && m.unit === state.myUnit);
@@ -6987,13 +6980,16 @@
       const qty = byUom(ms.map(m => [m.uom, m.soh]));
       return { val, days: off > 0 ? (val / off) * 30 : 0, qty };
     };
-    const rm = group(['Raw Material', 'Chemical']);
+    // Chemicals have their own card: they are bought and held apart from raw
+    // material. Finished goods are left off — their cover matters to production
+    // planning, not to what MRP buys (review of 16 Sept 2026).
+    const rm = group(['Raw Material']);
     const pm = group(['Packaging']);
+    const ch = group(['Chemical']);
 
-    const fgDays = fgOff > 0 ? (fgVal / fgOff) * 30 : 0;
-    const fgStatus = coverStatus(fgDays);
     const rmStatus = coverStatus(rm.days);
     const pmStatus = coverStatus(pm.days);
+    const chStatus = coverStatus(ch.days);
 
     // Quantity to order, split the way the categories are actually bought —
     // raw material, packaging, chemical — and inside each one still grouped by
@@ -7047,13 +7043,13 @@
       'review': { h:`${c.length} items sailed through on their own`,
                   p:`${f.length} ${f.length === 1 ? 'is' : 'are'} worth a look before the list goes for approval.`,
                   b:'Look at them', tone:'flag' },
-      'complete': { h:'Approved — ready to send',
-                    p:`${decided} line${decided === 1 ? '' : 's'} answered. ${c.length} cleared on their own.`,
-                    b:'Send to Dynamics', tone:'good' },
+      'complete': { h:'Approved — create the PRs',
+                    p:`${decided} line${decided === 1 ? '' : 's'} answered. Raise a PR against each approved line, for as much of it as you need now.`,
+                    b:'Raise PRs', tone:'good' },
       'closed': { h:`${cycleName()} is done`,
                   p: `${openBook().length
-                        ? `Everything is in Dynamics. ${aedM(openValue())} is still to raise a PR for — that comes across.`
-                        : 'Everything is in Dynamics and nothing is outstanding.'} The next plan would be ${esc(nextCycleName())}.`,
+                        ? `Every approved line on this plan is on a PR. ${aedM(openValue())} from earlier plans is still to raise — that comes across.`
+                        : 'Every approved line is on a PR and nothing is outstanding.'} The next plan would be ${esc(nextCycleName())}.`,
                   b:'Start the next plan', tone:'good' }
     }[cs.k];
 
@@ -7099,13 +7095,6 @@
           <div class="s">${esc(CYCLE_LABELS[state.accCycle])} · ${prev == null ? 'no earlier month' :
             `${delta >= 0 ? 'up' : 'down'} ${Math.abs(delta * 100).toFixed(1)} pts`} · see every business unit</div>
         </button>
-        <button class="card card-btn ${fgStatus ? fgStatus.cls : ''}" data-open-stock="fg">
-          <div class="card-top">${fgStatus ? `<span class="pill p-${fgStatus.tone}">${fgStatus.label}</span>` : ''}</div>
-          <div class="t">Finished goods ${infoMark('What the finished stock here is worth, how much of it there is, and how long it lasts.')}</div>
-          <div class="n">${aedM(fgVal)}</div>
-          <div class="q">${fgQty.length ? esc(fgQty.join(' · ')) : 'nothing on hand'}</div>
-          <div class="s">${Math.round(fgDays)} days' cover</div>
-        </button>
         <button class="card card-btn ${rmStatus ? rmStatus.cls : ''}" data-open-stock="rm">
           <div class="card-top">${rmStatus ? `<span class="pill p-${rmStatus.tone}">${rmStatus.label}</span>` : ''}</div>
           <div class="t">Raw materials ${infoMark('What the raw material stock is worth, how much of it there is, and how long it lasts.')}</div>
@@ -7119,6 +7108,13 @@
           <div class="n">${aedM(pm.val)}</div>
           <div class="q">${pm.qty.length ? esc(pm.qty.join(' · ')) : 'nothing on hand'}</div>
           <div class="s">${Math.round(pm.days)} days' cover</div>
+        </button>
+        <button class="card card-btn ${chStatus ? chStatus.cls : ''}" data-open-stock="ch">
+          <div class="card-top">${chStatus ? `<span class="pill p-${chStatus.tone}">${chStatus.label}</span>` : ''}</div>
+          <div class="t">Chemicals ${infoMark('What the chemical stock is worth, how much of it there is, and how long it lasts.')}</div>
+          <div class="n">${aedM(ch.val)}</div>
+          <div class="q">${ch.qty.length ? esc(ch.qty.join(' · ')) : 'nothing on hand'}</div>
+          <div class="s">${Math.round(ch.days)} days' cover</div>
         </button>
         </div>
       </section>
@@ -7152,7 +7148,7 @@ ${unitBoardHtml()}
         <div class="group-top">
           <div class="sec-h" style="margin-bottom:0">
             <span class="sec-t">Balance still to raise</span>
-            <span class="sec-s">· Requirement agreed, order not raised yet</span>
+            <span class="sec-s">· Approved, no PR raised for it yet</span>
           </div>
           <button class="btn btn-s btn-ghost" data-step="${PAGE_CALLOFFS}">See PR status →</button>
         </div>
@@ -8664,6 +8660,10 @@ ${unitBoardHtml()}
            bands rather than sitting in a list beside them, so the composition
            reads as one object instead of a diagram next to some text. */ ''}
       <div class="runwrap runwrap-live">
+        <div class="runtitle" role="status">
+          <h2>Calculating what to buy${state.simulate ? ' — dry run' : ''}</h2>
+          <p>${esc(u.name)} · this takes about a minute</p>
+        </div>
         <div class="runradar ${r.done ? 'is-done' : ''}">
           <span class="rr-ring r3"></span>
           <span class="rr-ring r2"></span>
@@ -8786,7 +8786,7 @@ ${unitBoardHtml()}
 
       ${state.simulate ? `<div class="ro-note">
         <span class="pill p-mute">Dry run</span>
-        <span>Same calculation, same trail — but this run cannot raise a PR. When you want to act on it, run it for real from the calculate step.</span>
+        <span>Same calculation, same trail — but this run cannot raise a PR. When you want to act on it, run it for real from Review MRP items.</span>
       </div>` : ''}
 
       <p class="sumline">
@@ -8853,10 +8853,10 @@ ${unitBoardHtml()}
             <th>Material ${multiPlant ? '· BU' : ''}</th>
             <th class="r">Cover</th><th class="r">On hand</th><th class="r">Open PO</th>
             <th class="r">Safety</th><th class="r">PR qty</th>
-            <th class="r col-val">Value</th><th></th>
+            <th class="r col-val">Value</th><th class="r">PR raised</th><th class="r">Balance</th><th></th>
           </tr></thead>
           <tbody>
-            ${rows.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:30px" class="muted">Nothing in this filter.</td></tr>` : ''}
+            ${rows.length === 0 ? `<tr><td colspan="10" style="text-align:center;padding:30px" class="muted">Nothing in this filter.</td></tr>` : ''}
             ${rows.map(l => {
               const tone = l.exceptions.includes('gap') || l.exceptions.includes('nodemand') ? 'p-crit' : 'p-flag';
               const qtyShown = l.prQty;
@@ -8884,9 +8884,19 @@ ${unitBoardHtml()}
                 <td class="r num muted" title="Minimum stock level: lead-time cover plus safety-day cover">${l.msl ? fmt(Math.round(l.msl)) : '—'}</td>
                 <td class="r num" style="font-weight: var(--w-semi)">${fmt(qtyShown)}</td>
                 <td class="r num col-val">${aed(qtyShown * l.m.price)}</td>
+                ${(() => {
+                  // Once the approver has answered, each row carries its own PR:
+                  // raised so far, what is left, and the button to raise the next.
+                  const b = canEdit(l) && (approvalOf(l.m.code) || {}).kind === 'approve' ? bookFor(l.m.code) : null;
+                  if (!b) return '<td class="r num muted">\u2014</td><td class="r num muted">\u2014</td>';
+                  const bal = balanceOf(b);
+                  return `<td class="r num">${fmt(raisedFor(b.id))}</td>
+                    <td class="r num" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${fmt(bal)}</td>`;
+                })()}
                 <td class="r" style="white-space:nowrap">
                   ${!canEdit(l) ? `<span class="pill p-mute">Read-only</span> <button class="btn btn-s btn-ghost" data-open="${l.m.code}">Open</button>`
-                    : `<button class="btn btn-s" data-open="${l.m.code}">${l.exceptions.length ? 'Open' : 'Trail'}</button>`}
+                    : `${(approvalOf(l.m.code) || {}).kind === 'reject' ? '<span class="pill p-crit">Rejected</span> ' : ''}${createPrCell(l.m.code)}
+                       <button class="btn btn-s" data-open="${l.m.code}">${l.exceptions.length ? 'Open' : 'Trail'}</button>`}
                 </td>
               </tr>`;
             }).join('')}
@@ -8915,17 +8925,16 @@ ${unitBoardHtml()}
                The reason to go back mid-review is nearly always a parameter
                that is wrong on the line being looked at. */ ''}
           <button class="btn btn-ghost btn-lg" data-step="${STEP_ITEMS}">← Back to MRP items</button>
-          ${/* Named for where the planner is going, not for the screen it opens.
-               The review ends here; what follows is approval, and the order list
-               is the first screen of it — the one the send happens on. */ ''}
-          <button class="btn btn-p btn-lg btn-arrow step-b" id="toOrders" style="min-width:254px;justify-content:center">Continue to approval
+          ${/* The review ends in the send itself. Once the list has gone, the
+               same button takes the planner to where the answer lands. */ ''}
+          <button class="btn btn-p btn-lg btn-arrow step-b" id="${state.approvalReq ? 'toApprove' : 'sendApproval'}" style="min-width:254px;justify-content:center">${state.approvalReq ? 'Continue to approval' : 'Send for approval'}
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>
         </div>
         <div class="step-sub">
-          <p class="step-n">${fmt(f.length)} line${f.length === 1 ? '' : 's'} worth a look · ${fmt(c.length)} cleared on their own · every line carries through to the order list, and that is where you send it to ${esc(approverFor(state.myUnit))}</p>
+          <p class="step-n">${fmt(f.length)} line${f.length === 1 ? '' : 's'} worth a look · ${fmt(c.length)} cleared on their own · ${state.approvalReq ? `sent to ${esc(state.approvalReq.to)} as ${esc(state.approvalReq.ref)}` : `every line goes to ${esc(approverFor(state.myUnit))} as one email`}</p>
         </div>`}
         </div>
     `;
@@ -8937,16 +8946,12 @@ ${unitBoardHtml()}
 
   // ---------- DRAWER ----------
   const STOCK_GROUPS = {
-    fg: { title:'Finished goods on hand', cats:null },
-    rm: { title:'Raw materials on hand', cats:['Raw Material', 'Chemical'] },
-    pm: { title:'Packaging material on hand', cats:['Packaging'] }
+    rm: { title:'Raw materials on hand', cats:['Raw Material'] },
+    pm: { title:'Packaging material on hand', cats:['Packaging'] },
+    ch: { title:'Chemicals on hand', cats:['Chemical'] }
   };
 
   function stockRows(kind) {
-    if (kind === 'fg') {
-      return FG_STOCK.filter(g => g.unit === state.myUnit)
-        .map(g => ({ code:g.code, desc:g.desc, uom:g.uom, qty:g.qty, value:g.qty * g.price }));
-    }
     const cats = STOCK_GROUPS[kind].cats;
     return MATERIALS.filter(m => cats.includes(m.cat) && m.unit === state.myUnit)
       .map(m => ({ code:m.code, desc:m.desc, uom:m.uom, qty:m.soh, value:m.soh * m.price }));
@@ -9296,7 +9301,6 @@ ${unitBoardHtml()}
 
           ${!canEdit(l) ? `<div class="note"><strong>Read-only.</strong> This line belongs to ${esc(UNITS.find(u => u.code === l.m.unit)?.name || l.m.unit)}. You can see how it was worked out, but only that plant's planner can act on it.</div>` : ''}
 
-          ${callOffBlock(l)}
         </div>
       </aside>
     `;
@@ -9322,47 +9326,7 @@ ${unitBoardHtml()}
       renderDrawer();
     });
 
-    const co = $('#coQty');
-    if (co) {
-      const note = $('#coNote');
-      const req = () => l.prQty;
-      const paint = () => {
-        const q = Math.max(0, Math.min(+co.value || 0, req()));
-        const bal = req() - q;
-        note.innerHTML = bal <= 0
-          ? 'The whole requirement goes on this cycle\'s order.'
-          : `<span style="color:var(--flag);font-weight: var(--w-semi)">${fmt(bal)} ${esc(l.m.uom)}</span> stays pending — raise a PR for it from PR status whenever you are ready.`;
-      };
-      co.oninput = () => {
-        const q = Math.max(0, Math.min(+co.value || 0, req()));
-        if (q >= req()) delete state.callOff[l.m.code]; else state.callOff[l.m.code] = q;
-        paint();
-      };
-      paint();
-    }
-
     document.addEventListener('keydown', escClose);
-  }
-
-  // The one place a planner can say "not all of it, not yet". It sits with the
-  // quantity decisions rather than on the order list, because by the time the
-  // order list exists the requirement has already gone to Dynamics — there is
-  // no moment left there to split anything.
-  function callOffBlock(l) {
-    if (!canEdit(l) || l.excluded || l.prQty <= 0) return '';
-    const req = l.prQty;
-    const co = state.callOff[l.m.code] == null ? req : Math.min(state.callOff[l.m.code], req);
-    return `
-      <div class="sep"></div>
-      <div>
-        <div class="label" style="margin-bottom:8px">Raise now ${infoMark('The requirement is the whole number. A requisition does not have to be — raise part of it with this cycle and raise a PR for the balance later.')}</div>
-        <label class="rowflex" style="justify-content:space-between">
-          <span>On this cycle's order</span>
-          <input type="number" id="coQty" value="${co}" min="0" max="${req}" step="${l.m.bundle || 1}"
-                 style="width:140px" aria-label="Quantity to raise on the first purchase request">
-        </label>
-        <div id="coNote" class="muted" style="margin-top:6px"></div>
-      </div>`;
   }
 
   function escClose(e) { if (e.key === 'Escape') closeDrawer(); }
@@ -9374,37 +9338,54 @@ ${unitBoardHtml()}
 
   // What is left to say on this screen once the write needs no asking for: that
   // it happened, when, and the reference the planner will be quoted back.
-  function prBannerHtml(orders, total, held) {
+  function prBannerHtml(orders, total) {
     if (!orders.length) return `
       <div class="note note-flag" style="margin-top:14px">
-        <strong>No requisition was raised.</strong> Every line on this list was rejected, so there is nothing to send to Dynamics.
+        <strong>Nothing to raise.</strong> The engine found nothing to buy for this plant on this run.
       </div>`;
-    const d = state.d365;
-    // Nothing has gone yet. This used to read "Raising the requisitions in D365"
-    // because the write fired on arrival and the banner was only ever seen for
-    // the second it took — now the list waits here to be read, and the banner
-    // has to say what is true while it waits.
-    if (!d) return `
+    const req = state.approvalReq;
+    const answered = req && orders.every(o => approvalOf(o.l.m.code));
+    if (!answered) return `
       <div class="prdone ready">
-        <span class="prdone-ic" aria-hidden="true">${state.simulate ? '\u26a0' : '\u2713'}</span>
+        <span class="prdone-ic" aria-hidden="true">${state.simulate ? '⚠' : req ? '⏳' : '✓'}</span>
         <div>
-          <div class="prdone-t">${state.simulate ? 'Dry run \u2014 this order list cannot go for approval' : 'The order list is ready'}</div>
-          <div class="prdone-s">${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)}${
-            held > 0 ? ` · ${aedM(held)} held back for later` : ''} · ${state.simulate
+          <div class="prdone-t">${state.simulate ? 'Dry run — this order list cannot go for approval'
+            : req ? `With ${esc(req.to)} for approval` : 'The order list is ready'}</div>
+          <div class="prdone-s">${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)} · ${state.simulate
               ? 'run it for real to act on this'
+              : req ? 'a Raise PR button appears on each line once it is approved'
               : 'check it over, then send it for approval'}</div>
         </div>
       </div>`;
-    const dirty = d365Dirty();
-    const at = d.at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const bk = planBook();
+    const raisedVal = bk.reduce((a, b) => a + raisedFor(b.id) * b.price, 0);
+    const balVal = bk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
+    const todo = bk.filter(b => balanceOf(b) > 0).length;
     return `
-      <div class="prdone ${dirty ? 'sync' : ''}">
-        <span class="prdone-ic" aria-hidden="true">${dirty ? '⋯' : '✓'}</span>
+      <div class="prdone ${todo ? 'sync' : ''}">
+        <span class="prdone-ic" aria-hidden="true">${todo ? '⋯' : '✓'}</span>
         <div>
-          <div class="prdone-t">${dirty ? 'Re-syncing ' : ''}<span class="num">${fmt(d.refs.length)} requisition${d.refs.length === 1 ? '' : 's'}</span> ${dirty ? 'with your edits' : 'raised in Dynamics 365'}</div>
-          <div class="prdone-s">${esc(d.refs.join(', '))} · one per supplier · ${fmt(d.count)} lines · ${aedM(total - held)} of ${aedM(total)} at ${at}${d.version > 1 ? ` · updated ${d.version - 1}\u00d7 since` : ''}${held > 0 ? ` · ${aedM(held)} pending` : ''}</div>
+          <div class="prdone-t">${todo
+            ? `<span class="num">${fmt(todo)}</span> approved line${todo === 1 ? '' : 's'} to create a PR for`
+            : 'Every approved line is fully on a PR'}</div>
+          <div class="prdone-s">${fmt(bk.length)} approved · ${fmt(planPrs().length)} PR${planPrs().length === 1 ? '' : 's'} raised · ${aedM(raisedVal)} raised · ${aedM(balVal)} still to raise</div>
         </div>
       </div>`;
+  }
+
+  // What a line's button says depends on where it stands: nothing until the
+  // approver has answered, nothing if they said no, and once approved a way to
+  // raise the next PR for as long as any of it is left.
+  function createPrCell(code) {
+    const a = approvalOf(code);
+    if (a && a.kind === 'reject') return '';
+    if (!a) return `<button class="btn btn-s" disabled title="Available once the approver has approved this line">Raise PR</button>`;
+    const b = bookFor(code);
+    if (!b) return '';
+    const bal = balanceOf(b);
+    return bal > 0
+      ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}" aria-label="Raise a PR for ${esc(code)}">Raise PR</button>`
+      : '<span class="pill p-good">Fully raised</span>';
   }
 
   // The working behind one order line, shown on the PR page itself.
@@ -9417,23 +9398,24 @@ ${unitBoardHtml()}
   // rather than a calculation. It is spelled out here rather than left implied.
   function orderWorkingHtml(o) {
     const l = o.l, m = l.m;
-    const called = callOffQty(o);
-    const balance = o.qty - called;
+    const bk = bookFor(m.code);
+    const called = bk ? raisedFor(bk.id) : 0;
+    const balance = bk ? balanceOf(bk) : o.qty;
     const overridden = o.d && o.d.kind === 'override';
 
     const split = [
       { t:'Requirement this cycle', e: overridden
           ? `engine suggested ${fmt(l.prQty)}, changed by you` : 'as calculated below', v:o.qty },
-      { t:'On this requisition', e: balance > 0
-          ? 'the part being raised now' : 'the whole requirement', v:called },
-      { t:'Held back', e: balance > 0
-          ? 'stays on the book — raise it when you are ready' : 'nothing held back', v:balance }
+      { t:'PR raised', e: bk
+          ? `${fmt(prsFor(bk.id).length)} PR${prsFor(bk.id).length === 1 ? '' : 's'} so far` : 'nothing until the line is approved', v:called },
+      { t:'Balance', e: balance > 0
+          ? 'still to raise — create another PR when you are ready' : 'fully raised', v:balance }
     ];
 
     return `
       <div class="ordwork">
         <div class="ordwork-c">
-          <div class="label" style="margin-bottom:6px">Partial PR — what is on this order</div>
+          <div class="label" style="margin-bottom:6px">PRs against this line</div>
           <div class="trail">
             ${split.map(s => `<div class="trail-row">
               <div><div class="t">${esc(s.t)}</div><div class="e">${esc(s.e)}</div></div>
@@ -9445,12 +9427,12 @@ ${unitBoardHtml()}
               ${/* Unit costs are pence-scale — aed() rounds to whole dirhams, which
                     would print a 1.12 cost as "1" and make the multiplication read
                     as wrong. */ ''}
-              <div><div class="t">PR value</div><div class="e">PR qty x ${dhs()}${fmt(m.price, 2)} unit cost — BRD F8</div></div>
+              <div><div class="t">PR value raised</div><div class="e">PR qty x ${dhs()}${fmt(m.price, 2)} unit cost — BRD F8</div></div>
               <div class="v">${aed(called * m.price)}</div>
             </div>
           </div>
           <div class="muted" style="margin-top:7px;font-size: var(--fs-xs)">
-            One release. How much of it lands when is a warehouse conversation, not a number this app holds.
+            Raised one PR at a time, for as much as the warehouse can take now.
           </div>
         </div>
 
@@ -9496,15 +9478,14 @@ ${unitBoardHtml()}
     const byUnit = {};
     orders.forEach(o => (byUnit[o.l.m.unit] = byUnit[o.l.m.unit] || []).push(o));
     const total = orders.reduce((a, o) => a + o.qty * o.l.m.price, 0);
-    // What this cycle asked for, less what is going on the PR it is about to
-    // raise. Not a shortfall — a balance the planner chose to keep back.
-    const heldBack = orders.reduce((a, o) => a + (o.qty - callOffQty(o)) * o.l.m.price, 0);
+    const bk = planBook();
+    const balVal = bk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
 
     return `
       <div class="head">
         <div>
           <h2>Order list — ${esc(myName())}</h2>
-          <p>Every line this cycle asks for, by unit, with the working behind each one. Approval is the next step.</p>
+          <p>Every line this cycle asks for, by unit, with the working behind each one. Once a line is approved, create a PR against it — as many as it takes.</p>
         </div>
         <div class="listdate">
           <span class="label">Raised</span>
@@ -9513,8 +9494,6 @@ ${unitBoardHtml()}
           <span>${esc(dShort(needBy()))}</span>
           ${state.approvalReq ? `<span class="label">Sent for approval</span>
           <span>${esc(dStamp(state.approvalReq.at))}</span>` : ''}
-          ${state.d365 ? `<span class="label">Sent to Dynamics</span>
-          <span>${esc(dStamp(state.d365.at))}</span>` : ''}
         </div>
       </div>
 
@@ -9529,39 +9508,7 @@ ${unitBoardHtml()}
         </p>`;
       })()}
 
-      ${prBannerHtml(orders, total, heldBack)}
-
-      ${/* A PR raised for part of a requirement is the normal case, not an error
-           — warehouse space and delivery schedules decide how much can land at
-           once. What matters is that the rest does not quietly disappear with
-           the cycle, so it is named here, on the page where the PR was raised,
-           with the button that finishes it. */ ''}
-      ${state.d365 && openBook().length ? `
-      <div class="panel prbal">
-        <div class="panel-h">
-          <div>
-            <h3>Partly ordered — ${fmt(openBook().length)} line${openBook().length === 1 ? '' : 's'} still to raise</h3>
-            <p>These went out for less than was asked for. The balance stays on the book and can be raised whenever the warehouse can take it — it does not expire with the cycle.</p>
-          </div>
-          <button class="btn btn-p btn-s" id="prBalAll">Generate the balance · ${aedM(openValue())}</button>
-        </div>
-        <div class="scroll"><table>
-          <thead><tr><th>Material</th><th>Supplier</th><th>Cycle</th><th class="r">Required</th><th class="r">Already raised</th><th class="r">Still to raise</th><th class="r col-val">Value</th><th></th></tr></thead>
-          <tbody>${openBook().map(b => {
-            const raised = raisedFor(b.id), bal = balanceOf(b);
-            return `<tr>
-              <td><div class="cell-code">${esc(b.code)}</div><div class="cell-desc">${esc(b.desc)}</div></td>
-              <td class="muted">${esc(b.supplier || '—')}</td>
-              <td class="muted">${esc(b.cycle || '—')}</td>
-              <td class="r num muted">${fmt(b.req)}</td>
-              <td class="r num">${fmt(raised)}</td>
-              <td class="r num" style="color:var(--flag);font-weight: var(--w-semi)">${fmt(bal)}</td>
-              <td class="r num col-val">${aed(bal * b.price)}</td>
-              <td class="r"><button class="btn btn-s btn-ghost" data-co-all="${esc(b.id)}">Raise ${fmt(bal)}</button></td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table></div>
-      </div>` : ''}
+      ${prBannerHtml(orders, total)}
 
       ${/* Same strip as the forecast checks screen and the purchase orders page:
            colour on the tile carries the state, a zero is greyed rather than
@@ -9573,25 +9520,34 @@ ${unitBoardHtml()}
           <div class="stat ${total > 0 ? 't-good' : 't-zero'}"><div class="v">${aedM(total)}</div><div class="k label">Total value</div></div>
           <div class="stat t-zero"><div class="v">${fmt(Object.keys(byUnit).length)}</div><div class="k label">Units</div></div>
           <div class="stat ${rejected ? 't-crit' : 't-zero'}"><div class="v">${fmt(rejected)}</div><div class="k label">Rejected</div><div class="d">${rejected ? 'Not carried forward' : 'None'}</div></div>
-          ${heldBack > 0 ? `<div class="stat t-flag"><div class="v">${aedM(heldBack)}</div><div class="k label">Pending</div><div class="d">Run it again later</div></div>` : ''}
+          ${bk.length ? `<div class="stat ${balVal > 0 ? 't-flag' : 't-good'}"><div class="v">${aedM(balVal)}</div><div class="k label">Still to raise</div><div class="d">${balVal > 0 ? 'Approved, not on a PR yet' : 'Fully raised'}</div></div>` : ''}
         </div>`;
       })()}
 
-      ${Object.entries(byUnit).sort().map(([u, rows]) => `
+      ${Object.entries(byUnit).sort().map(([u, rows]) => {
+        const sel = selectable(rows.filter(o => (approvalOf(o.l.m.code) || {}).kind === 'approve').map(o => bookFor(o.l.m.code)));
+        return `
         <div class="panel">
           <div class="panel-h">
             <div><h3>${u} — ${esc(UNITS.find(x => x.code === u)?.name || '')}</h3><p>${rows.length} lines · ${aed(rows.reduce((a, o) => a + o.qty * o.l.m.price, 0))}</p></div>
+            ${selButton(sel)}
           </div>
           <div class="scroll"><table>
-            <thead><tr><th>Material</th><th class="r">Suggested</th><th class="r">Requirement</th><th class="r">On this order</th><th class="r">Pending</th><th>Expected arrival</th><th class="r col-val">Value</th><th>Status</th><th></th></tr></thead>
+            <thead><tr>${selHead(sel)}<th>Material</th><th class="r">Suggested</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th>Expected arrival</th><th class="r col-val">Value</th><th>Status</th><th></th><th></th></tr></thead>
             <tbody>${rows.map(o => `<tr>
+              ${selCell((approvalOf(o.l.m.code) || {}).kind === 'approve' ? bookFor(o.l.m.code) : null,
+                (approvalOf(o.l.m.code) || {}).kind === 'reject' ? 'Rejected — cannot be raised' : null)}
               <td><div class="cell-code">${esc(o.l.m.code)}</div><div class="cell-desc">${esc(o.l.m.desc)}</div></td>
               <td class="r num muted">${fmt(o.l.prQty)}</td>
               <td class="r num" style="font-weight: var(--w-semi)">${fmt(o.qty)}</td>
               ${(() => {
-                const q = callOffQty(o), bal = o.qty - q;
+                // Only an approved line has a balance; before that nothing can
+                // be raised against it, so both columns stay empty.
+                const b = bookFor(o.l.m.code);
+                if (!b) return '<td class="r num muted">\u2014</td><td class="r num muted">\u2014</td>';
+                const q = raisedFor(b.id), bal = balanceOf(b);
                 return `<td class="r num" style="font-weight: var(--w-semi)">${fmt(q)}</td>
-                  <td class="r num ${bal > 0 ? '' : 'muted'}" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${bal > 0 ? fmt(bal) : '—'}</td>`;
+                  <td class="r num ${bal > 0 ? '' : 'muted'}" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${bal > 0 ? fmt(bal) : '0'}</td>`;
               })()}
               ${(() => {
                 // Lead time from the item master, counted from today. If that
@@ -9611,6 +9567,7 @@ ${unitBoardHtml()}
                   ? `<span class="pill ${a.kind === 'approve' ? 'p-good' : 'p-crit'}">${a.kind === 'approve' ? 'Approved' : 'Rejected'}</span>${a.kind === 'reject' && a.reason ? ` <span class="muted" style="font-size: var(--fs-xs)">${esc(a.reason)}</span>` : ''}`
                   : '<span class="pill p-flag">Waiting</span>'}</td>`;
               })()}
+              <td class="r" style="white-space:nowrap">${createPrCell(o.l.m.code)}</td>
               ${(() => {
                 const on = state.ordOpen === o.l.m.code;
                 return `<td class="r"><button class="xbtn ${on ? 'on' : ''}" data-ordwork="${esc(o.l.m.code)}"
@@ -9618,55 +9575,38 @@ ${unitBoardHtml()}
                   title="${on ? 'Hide the working' : 'Show the working'}">${CHEV}</button></td>`;
               })()}
             </tr>
-            ${state.ordOpen === o.l.m.code ? `<tr class="fixrow"><td colspan="9">${orderWorkingHtml(o)}</td></tr>` : ''}`).join('')}</tbody>
+            ${state.ordOpen === o.l.m.code ? `<tr class="fixrow"><td colspan="11">${orderWorkingHtml(o)}</td></tr>` : ''}`).join('')}</tbody>
           </table></div>
-        </div>`).join('')}
+        </div>`; }).join('')}
       <div class="step-bar">
         <div class="step-row">
-          ${/* Before it goes: submitting is the loud thing, because it is the
-               one act on this page that leaves the building. After it has gone
-               the cycle ends here, so this is where the planner stays, and the
-               only primary left is work genuinely still outstanding — a balance
-               to raise — of which there often is none. */ ''}
-          ${/* Sending is an act on this list, so it happens on the screen that
-               shows the list. The approval step is where the answer lands. */ ''}
-          ${!state.d365 && !state.simulate && !state.approvalReq ? `<button class="btn btn-p btn-lg btn-arrow step-b" id="sendApproval" ${orders.length ? '' : 'disabled'}>Send for approval
+          ${!state.simulate && !state.approvalReq ? `<button class="btn btn-p btn-lg btn-arrow step-b" id="sendApproval" ${orders.length ? '' : 'disabled'}>Send for approval
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
-          ${!state.d365 && state.approvalReq ? `<button class="btn btn-p btn-lg btn-arrow step-b" id="toApprove">${
-            buildOrders().every(o => approvalOf(o.l.m.code)) ? 'See the approval' : `With ${esc(state.approvalReq.to)}`}
+          ${state.approvalReq && !buildOrders().every(o => approvalOf(o.l.m.code)) ? `<button class="btn btn-p btn-lg btn-arrow step-b" id="toApprove">Waiting for approval
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
-          ${state.d365 && d365Dirty() ? `<button class="btn btn-p btn-lg step-b" id="sendApproval">Send the change for approval</button>` : ''}
-          ${state.d365 && !d365Dirty() && openBook().length ? `<button class="btn btn-p btn-lg btn-arrow step-b" data-step="${PAGE_CALLOFFS}">Raise the balance (${openBook().length})
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
-            </svg>
-          </button>` : ''}
-          ${!state.d365 && openBook().length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">Balance to raise (${openBook().length})</button>` : ''}
+          ${bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-s btn-ghost" id="exportCsv">Export CSV</button>
           <button class="btn btn-s btn-ghost" data-step="0">Back to dashboard</button>
-          ${/* The cycle is closed and on the record. Opening the next one is a
-               deliberate act, so it is offered here and nowhere else — and only
-               once there is something to close. */ ''}
-          ${state.d365 && !d365Dirty() ? `<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>` : ''}
+          ${/* Opening the next plan is a deliberate act, offered only once the
+               approver has answered. Balances still to raise come across. */ ''}
+          ${cycleState().k === 'closed' ? `<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>` : ''}
         </div>
         <div class="step-sub">
-          <p class="step-n">${state.d365
-            ? (d365Dirty()
-                ? `An approval changed after ${esc(state.d365.refs.join(', '))} went. Send it again and Dynamics is corrected.`
-                : `${esc(state.d365.refs.join(', '))} ${state.d365.refs.length === 1 ? 'is' : 'are'} in Dynamics. The cycle is closed and archived \u2014 this list stays here for as long as you want it.`)
-            : state.simulate
-            ? 'Dry run — this order list cannot go for approval or become a PR. Run it for real from the calculate step when you want to act on it.'
+          <p class="step-n">${state.simulate
+            ? 'Dry run — this order list cannot go for approval or become a PR. Run it for real from Review MRP items when you want to act on it.'
             : orders.length
             ? (state.approvalReq
-                ? `${esc(state.approvalReq.ref)} sent ${esc(dStamp(state.approvalReq.at))} · with ${esc(state.approvalReq.to)} · ${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)} · their answer lands on the approval step`
-                : `${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)} · read it, then send it to ${esc(approverFor(state.myUnit))} — nothing reaches Dynamics until every line has an answer`)
-            : `Nothing to raise — every line on this list was rejected.`}</p>
+                ? (bk.length || buildOrders().every(o => approvalOf(o.l.m.code))
+                    ? `${esc(state.approvalReq.ref)} answered by ${esc(state.approvalReq.to)} · create a PR against each approved line, one at a time · rejected lines cannot be raised`
+                    : `${esc(state.approvalReq.ref)} sent ${esc(dStamp(state.approvalReq.at))} · with ${esc(state.approvalReq.to)} · ${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)} · their answer lands on the approval step`)
+                : `${fmt(orders.length)} line${orders.length === 1 ? '' : 's'} · ${aedM(total)} · read it, then send it to ${esc(approverFor(state.myUnit))} — no PR can be created until a line is approved`)
+            : `Nothing to raise on this list.`}</p>
         </div>
       </div>
     `;
@@ -9681,35 +9621,41 @@ ${unitBoardHtml()}
       .filter(o => o.unit === state.myUnit)
       .slice().sort((a, b) => new Date(b.at) - new Date(a.at));
     const liveId = cycleId();
-    const n = k => rows.filter(o => o.status === k).length;
-    const open = rows.filter(o => o.status !== 'raised' && o.status !== 'superseded').length;
+    const n = k => rows.filter(o => olStatus(o) === k).length;
+    const open = rows.filter(o => olStatus(o) !== 'raised' && olStatus(o) !== 'superseded').length;
+    const allBk = rows.flatMap(olBook);
+    const raisedVal = allBk.reduce((a, b) => a + raisedFor(b.id) * b.price, 0);
+    const balVal = allBk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
 
     return `
       <div class="pagehead">
         <div class="hello"><div>
           <h1 class="greet">Order lists</h1>
-          <p class="greet-s">Every list this business unit has worked out and where it ended up. A plan can be run whenever it is needed, so most lists are replaced by a later one before they go anywhere.</p>
+          <p class="greet-s">Every list this business unit has worked out, every run that rewrote it, and where it ended up — including how much of each approved line is on a PR and the balance still to raise.</p>
         </div></div>
       </div>
 
       <div class="stats tight">
         <div class="stat ${rows.length ? 't-info' : 't-zero'}"><div class="v">${fmt(rows.length)}</div><div class="k label">Lists</div><div class="d">at ${esc(myName())}</div></div>
-        <div class="stat ${open ? 't-flag' : 't-zero'}"><div class="v">${fmt(open)}</div><div class="k label">Still open</div><div class="d">${open ? 'Draft or with an approver' : 'Nothing outstanding'}</div></div>
-        <div class="stat ${n('raised') ? 't-good' : 't-zero'}"><div class="v">${fmt(n('raised'))}</div><div class="k label">Raised</div><div class="d">Requisitions in Dynamics</div></div>
-        <div class="stat t-zero"><div class="v">${fmt(n('superseded'))}</div><div class="k label">Superseded</div><div class="d">Replaced by a later plan</div></div>
+        <div class="stat ${open ? 't-flag' : 't-zero'}"><div class="v">${fmt(open)}</div><div class="k label">Still open</div><div class="d">${open ? 'Draft, with an approver, or a balance to raise' : 'Nothing outstanding'}</div></div>
+        <div class="stat ${raisedVal ? 't-good' : 't-zero'}"><div class="v">${aedM(raisedVal)}</div><div class="k label">PR raised</div><div class="d">${fmt(n('raised'))} list${n('raised') === 1 ? '' : 's'} fully raised</div></div>
+        <div class="stat ${balVal ? 't-flag' : 't-zero'}"><div class="v">${aedM(balVal)}</div><div class="k label">Balance</div><div class="d">Approved, not on a PR yet</div></div>
       </div>
 
       <div class="panel">
         ${rows.length ? `<div class="scroll"><table>
           <thead><tr>
             <th>Date &amp; time</th><th>List</th><th>Plan</th><th class="r">Lines</th>
-            <th class="r col-val">Value</th><th>Status</th><th></th>
+            <th class="r col-val">Value</th><th class="r">PR raised</th><th class="r">Balance</th><th>Status</th><th></th>
           </tr></thead>
           <tbody>
             ${rows.map(o => {
-              const st = OL_STATUS[o.status] || OL_STATUS.draft;
-              const isOpen = state.olOpen === o.id;
-              const live = o.id === liveId && o.status !== 'raised' && o.status !== 'superseded';
+              const st = OL_STATUS[olStatus(o)] || OL_STATUS.draft;
+              const isOpen = state.olOpen === o.id || (state.olOpen == null && o === rows[0]);
+              const live = o.id === liveId && olStatus(o) !== 'raised' && olStatus(o) !== 'superseded';
+              const bk = olBook(o);
+              const oRaised = bk.reduce((a, b) => a + raisedFor(b.id) * b.price, 0);
+              const oBal = bk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
               return `
               <tr>
                 <td class="muted">${esc(dStamp(new Date(o.at)))}</td>
@@ -9720,6 +9666,8 @@ ${unitBoardHtml()}
                 <td class="muted">${esc(o.cycle)}</td>
                 <td class="r num">${fmt(o.lines || 0)}</td>
                 <td class="r num col-val">${aed(o.value || 0)}</td>
+                <td class="r num">${bk.length ? aed(oRaised) : '<span class="muted">\u2014</span>'}</td>
+                <td class="r num" ${oBal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${bk.length ? aed(oBal) : '<span class="muted">\u2014</span>'}</td>
                 <td><span class="pill ${st.tone}">${esc(st.t)}</span><div class="cell-desc">${esc(st.d)}</div></td>
                 <td class="r" style="white-space:nowrap">
                   ${live ? `<button class="btn btn-s btn-ghost" data-step="${STEP_ORDERS}">Open</button> ` : ''}
@@ -9728,13 +9676,13 @@ ${unitBoardHtml()}
                     title="${isOpen ? 'Hide the lines' : 'Show the lines'}">${CHEV}</button>
                 </td>
               </tr>
-              ${isOpen ? `<tr class="co-row"><td colspan="7"><div class="co-box">
+              ${isOpen ? `<tr class="co-row"><td colspan="9"><div class="co-box">
                 <ol class="tl" style="margin-bottom:${(o.rows || []).length ? '14px' : '0'}">
-                  <li class="tl-i">
+                  ${(o.runs && o.runs.length ? o.runs : [{ no: o.runNo, at: o.at, lines: o.lines, value: o.value }]).map((r, i) => `<li class="tl-i">
                     <span class="tl-d" aria-hidden="true"></span>
-                    <div class="tl-h"><span class="tl-t">Worked out${o.runNo ? ` by run ${fmt(o.runNo)}` : ''}</span><span class="tl-at">${esc(dStamp(new Date(o.at)))}</span></div>
-                    <div class="tl-e">${fmt(o.lines || 0)} lines · ${aed(o.value || 0)}${o.fcVersion ? ` · forecast v${fmt(o.fcVersion)}` : ''}</div>
-                  </li>
+                    <div class="tl-h"><span class="tl-t">${i ? 'Worked out again' : 'Worked out'}${r.no ? ` by run ${fmt(r.no)}` : ''}</span><span class="tl-at">${esc(dStamp(new Date(r.at)))}</span></div>
+                    <div class="tl-e">${fmt(r.lines || 0)} lines · ${aed(r.value || 0)}${!i && o.fcVersion ? ` · forecast v${fmt(o.fcVersion)}` : ''}</div>
+                  </li>`).join('')}
                   ${o.sentAt ? `<li class="tl-i">
                     <span class="tl-d" aria-hidden="true"></span>
                     <div class="tl-h"><span class="tl-t">Sent to ${esc(o.to || '')}</span><span class="tl-at">${esc(dStamp(new Date(o.sentAt)))}</span></div>
@@ -9745,25 +9693,45 @@ ${unitBoardHtml()}
                     <div class="tl-h"><span class="tl-t">${esc(o.to || 'The approver')} answered</span><span class="tl-at">${esc(dStamp(new Date(o.answeredAt)))}</span></div>
                     <div class="tl-e">${o.rejected ? `${fmt(o.rejected)} line${o.rejected === 1 ? '' : 's'} rejected` : 'every line approved'}</div>
                   </li>` : ''}
-                  ${o.raisedAt ? `<li class="tl-i tl-now">
+                  ${state.prs.filter(r => o.apRef && r.batch === o.apRef).sort((x, y) => new Date(x.at) - new Date(y.at)).map(r => {
+                    const l = r.lines[0] || {};
+                    return `<li class="tl-i">
                     <span class="tl-d" aria-hidden="true"></span>
-                    <div class="tl-h"><span class="tl-t">Raised in Dynamics</span><span class="tl-at">${esc(dStamp(new Date(o.raisedAt)))}</span></div>
-                    <div class="tl-e">${esc((o.prRefs || []).join(', '))}</div>
-                  </li>` : ''}
+                    <div class="tl-h"><span class="tl-t">${esc(r.ref)} raised</span><span class="tl-at">${esc(dStamp(new Date(r.at)))}</span></div>
+                    <div class="tl-e">${esc(l.code || '')} · ${fmt(r.lines.reduce((a, x) => a + x.qty, 0))}</div>
+                  </li>`; }).join('')}
                   ${o.supersededAt ? `<li class="tl-i tl-now">
                     <span class="tl-d" aria-hidden="true"></span>
                     <div class="tl-h"><span class="tl-t">Replaced by a later plan</span><span class="tl-at">${esc(dStamp(new Date(o.supersededAt)))}</span></div>
                     <div class="tl-e">Nothing on this list was raised</div>
                   </li>` : ''}
                 </ol>
-                ${(o.rows || []).length ? `<div class="label" style="margin-bottom:6px">The lines as they stood</div>
-                <div class="trail">
-                  ${o.rows.map(r => `<div class="trail-row">
-                    <div><div class="t">${esc(r.code)}</div><div class="e">${esc(r.desc || '')}${
-                      r.approval ? ` · ${r.approval === 'approve' ? 'approved' : `rejected — ${esc(r.reason || 'no reason given')}`}` : ''}</div></div>
-                    <div class="v">${fmt(r.qty)} ${esc(r.uom || '')}<div class="e" style="text-align:right">${aed(r.value || 0)}</div></div>
-                  </div>`).join('')}
-                </div>` : '<p class="muted" style="font-size: var(--fs-xs);margin:0">No line detail was kept for this list.</p>'}
+                ${(o.rows || []).length ? (() => {
+                  const olSel = selectable(o.rows.filter(r => r.approval === 'approve').map(r => o.apRef ? state.book.find(x => x.id === `${o.apRef}-${r.code}`) : null));
+                  return `<div class="rowflex" style="justify-content:space-between;margin-bottom:6px">
+                  <div class="label">The lines, with what is on a PR against each</div>
+                  ${selButton(olSel)}
+                </div>
+                <div class="scroll"><table>
+                  <thead><tr>${selHead(olSel)}<th>Material</th><th>Approval</th><th class="r">Requirement</th><th class="r">PR raised</th><th class="r">Balance</th><th></th></tr></thead>
+                  <tbody>${o.rows.map(r => {
+                    const b = o.apRef ? state.book.find(x => x.id === `${o.apRef}-${r.code}`) : null;
+                    const bal = b ? balanceOf(b) : null;
+                    return `<tr>
+                      ${selCell(r.approval === 'approve' ? b : null, r.approval === 'reject' ? 'Rejected — cannot be raised' : null)}
+                      <td style="max-width:34ch"><div class="cell-code">${esc(r.code)}</div><div class="cell-desc">${esc(r.desc || '')}</div></td>
+                      <td>${r.approval === 'approve' ? '<span class="pill p-good">Approved</span>'
+                        : r.approval === 'reject' ? `<span class="pill p-crit">Rejected</span><div class="cell-desc">${esc(r.reason || 'no reason given')}</div>`
+                        : '<span class="pill p-mute">Not answered</span>'}</td>
+                      <td class="r num">${fmt(r.qty)} <span class="muted">${esc(r.uom || '')}</span></td>
+                      <td class="r num">${b ? fmt(raisedFor(b.id)) : '<span class="muted">\u2014</span>'}</td>
+                      <td class="r num" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${b ? fmt(bal) : '<span class="muted">\u2014</span>'}</td>
+                      <td class="r" style="white-space:nowrap">${b && bal > 0 && r.approval === 'approve'
+                        ? `<button class="btn btn-s btn-p" data-co="${esc(b.id)}">Raise PR</button>`
+                        : b ? '<span class="pill p-good">Fully raised</span>' : ''}</td>
+                    </tr>`;
+                  }).join('')}</tbody>
+                </table></div>`; })() : '<p class="muted" style="font-size: var(--fs-xs);margin:0">No line detail was kept for this list.</p>'}
               </div></td></tr>` : ''}`;
             }).join('')}
           </tbody>
@@ -9778,11 +9746,163 @@ ${unitBoardHtml()}
     `;
   }
 
+  // One PR against one approved line. Opened from the Create PR button on the
+  // order list, approval, order lists and PR status, and nowhere else.
+  function viewNewPr() {
+    const ids = state.newPr ? (state.newPr.ids || (state.newPr.id ? [state.newPr.id] : [])) : [];
+    const bs = ids.map(id => state.book.find(x => x.id === id)).filter(Boolean);
+    if (bs.length > 1) return viewNewPrMany(bs);
+    const b = bs[0];
+    if (!b) return `
+      <div class="panel"><div class="empty">
+        ${emptyArt('box')}
+        <div class="empty-t">No line chosen</div>
+        <p class="empty-p">Raise PR opens from an approved line — on the approval step, the order list or PR status.</p>
+        <button class="btn btn-p" data-step="${PAGE_CALLOFFS}">Go to PR status</button>
+      </div></div>`;
+    const raised = raisedFor(b.id), bal = balanceOf(b);
+    const pct = b.req > 0 ? Math.round((raised / b.req) * 100) : 0;
+    const draft = state.coDraft[b.id] == null ? bal : state.coDraft[b.id];
+    const history = prsFor(b.id).slice().sort((x, y) => new Date(x.at) - new Date(y.at));
+    const u = esc(b.uom || '');
+    let run = 0;
+
+    return `
+      <div class="pagehead">
+        <div class="hello"><div>
+          <h1 class="greet">Raise PR</h1>
+          <p class="greet-s">A purchase requisition against one approved line, for as much of it as you need now. Whatever you do not raise stays as a balance on the line for the next PR.</p>
+        </div></div>
+      </div>
+
+      <div class="stats tight">
+        <div class="stat t-info"><div class="v">${fmt(b.req)}</div><div class="k label">Approved</div><div class="d">${u}${b.apRef ? ` · ${esc(b.apRef)}` : ''}</div></div>
+        <div class="stat ${raised ? 't-good' : 't-zero'}"><div class="v">${fmt(raised)}</div><div class="k label">PR raised</div><div class="d">${history.length ? `${fmt(history.length)} PR${history.length === 1 ? '' : 's'} · ${pct}%` : 'None yet'}</div></div>
+        <div class="stat ${bal > 0 ? 't-flag' : 't-good'}"><div class="v">${fmt(bal)}</div><div class="k label">Balance</div><div class="d">${bal > 0 ? 'Still to raise' : 'Fully raised'}</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h">
+          <div>
+            <h3><span class="cell-code">${esc(b.code)}</span></h3>
+            <p>${esc(b.desc)} · ${esc(b.supplier || 'Unassigned')} · ${dhs()}${fmt(b.price, 2)} per ${u} · ${esc(b.cycle || '')}</p>
+          </div>
+        </div>
+        <div class="panel-b">
+          ${bal > 0 ? `
+          <div class="co-form">
+            <label class="rowflex" style="gap:8px">
+              <span class="label" style="margin:0">Quantity on this PR</span>
+              <input type="number" id="npQty" value="${draft}" min="1" max="${bal}" style="width:160px"
+                     aria-label="Quantity to raise for ${esc(b.code)}">
+              <span class="muted">${u} of ${fmt(bal)} still to raise</span>
+            </label>
+            <button class="btn btn-s btn-ghost" id="npAll">Use the full balance</button>
+          </div>
+          <div id="npWarn" class="why" style="margin-top:6px"></div>
+          <div class="trail" style="margin-top:12px">
+            <div class="trail-row">
+              <div><div class="t">PR value</div><div class="e">quantity x ${dhs()}${fmt(b.price, 2)} unit cost</div></div>
+              <div class="v" id="npVal"></div>
+            </div>
+            <div class="trail-row">
+              <div><div class="t">Balance after this PR</div><div class="e">stays on the line for the next PR — it does not expire with the plan</div></div>
+              <div class="v" id="npAfter"></div>
+            </div>
+          </div>`
+          : `<div class="note"><strong>Fully raised.</strong> All ${fmt(b.req)} ${u} of this line is on a PR. There is nothing left to raise.</div>`}
+        </div>
+      </div>
+
+      ${history.length ? `
+      <div class="panel">
+        <div class="panel-h"><div><h3>Already raised against this line</h3><p>Every PR so far, oldest first, with the balance each one left.</p></div></div>
+        <div class="scroll"><table>
+          <thead><tr><th>Date &amp; time</th><th>PR</th><th>Status</th><th class="r">PR qty</th><th class="r">Total raised</th><th class="r">Balance</th></tr></thead>
+          <tbody>${history.map(r => {
+            const q = r.lines.filter(x => x.id === b.id).reduce((a, x) => a + x.qty, 0);
+            run += q;
+            const st = prStatus(r);
+            return `<tr>
+              <td class="muted">${esc(dStamp(r.at))}</td>
+              <td class="cell-code">${esc(r.ref)}</td>
+              <td><span class="pill ${st.p}">${st.t}</span></td>
+              <td class="r num">${fmt(q)}</td>
+              <td class="r num">${fmt(run)}</td>
+              <td class="r num">${fmt(Math.max(0, b.req - run))}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>` : ''}
+
+      <div class="step-bar">
+        <div class="step-row">
+          ${bal > 0 ? '<button class="btn btn-p btn-lg step-b" id="npGo">Raise PR</button>' : ''}
+          <button class="btn btn-s btn-ghost" id="npCancel">${bal > 0 ? 'Cancel' : 'Back'}</button>
+        </div>
+        <div class="step-sub"><p class="step-n">The PR goes to Dynamics against ${esc(b.supplier || 'the supplier')} and shows on PR status with the running total and the balance.</p></div>
+      </div>
+    `;
+  }
+
+  // The ticked lines, each asking for its own quantity. Nothing is raised
+  // until the planner presses the button, and each line becomes its own PR.
+  function viewNewPrMany(bs) {
+    return `
+      <div class="pagehead">
+        <div class="hello"><div>
+          <h1 class="greet">Raise PRs — ${fmt(bs.length)} selected lines</h1>
+          <p class="greet-s">One PR per line. Check each quantity — lower it to raise only part now, and the rest stays on the line for the next PR.</p>
+        </div></div>
+      </div>
+
+      <div class="panel">
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>Material</th><th>Supplier</th><th class="r">Approved</th><th class="r">PR raised</th><th class="r">Balance</th>
+            <th class="r">Quantity on this PR</th><th class="r col-val">PR value</th><th class="r">Balance after</th>
+          </tr></thead>
+          <tbody>${bs.map(b => {
+            const bal = balanceOf(b);
+            const draft = state.coDraft[b.id] == null ? bal : state.coDraft[b.id];
+            return `<tr>
+              <td style="max-width:32ch"><div class="cell-code">${esc(b.code)}</div><div class="cell-desc">${esc(b.desc)}</div></td>
+              <td>${esc(b.supplier || 'Unassigned')}</td>
+              <td class="r num">${fmt(b.req)} <span class="muted">${esc(b.uom || '')}</span></td>
+              <td class="r num">${fmt(raisedFor(b.id))}</td>
+              <td class="r num">${fmt(bal)}</td>
+              <td class="r"><input type="number" data-npq="${esc(b.id)}" value="${draft}" min="1" max="${bal}" style="width:130px"
+                aria-label="Quantity to raise for ${esc(b.code)}"><div class="why" data-npw="${esc(b.id)}"></div></td>
+              <td class="r num col-val" data-npv="${esc(b.id)}"></td>
+              <td class="r num" data-npa="${esc(b.id)}"></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>
+
+      <div class="step-bar">
+        <div class="step-row">
+          <button class="btn btn-p btn-lg step-b" id="npGoMany">Raise ${fmt(bs.length)} PRs</button>
+          <button class="btn btn-s btn-ghost" id="npCancel">Cancel</button>
+        </div>
+        <div class="step-sub"><p class="step-n"><span id="npTotal"></span> · each PR shows on PR status with its running total and balance.</p></div>
+      </div>
+    `;
+  }
+
   // ---------- STEP 6 — APPROVAL ----------
   // The order list is what the cycle asks for; this is the answer to it. Held
   // per material code: the engine says what to buy, the planner reads it, and
   // this is where somebody signs for the money.
   const approvalOf = code => state.approvals[code] || null;
+  // Numbered per send, so a re-sent list is a new request with its own demand.
+  function nextApRef() {
+    const pre = `AP-${cycleId()}`.toUpperCase();
+    const used = new Set([...state.orderLog.map(o => o.apRef), ...state.book.map(b => b.batch)].filter(Boolean));
+    let n = 1;
+    while (used.has(n === 1 ? pre : `${pre}-${n}`)) n++;
+    return n === 1 ? pre : `${pre}-${n}`;
+  }
   const approvedOrders = () => buildOrders().filter(o => (approvalOf(o.l.m.code) || {}).kind === 'approve');
 
   function viewApprove() {
@@ -9808,30 +9928,26 @@ ${unitBoardHtml()}
     const pend = orders.filter(o => !kindOf(o));
     const val = ls => ls.reduce((a, o) => a + o.qty * o.l.m.price, 0);
     const req = state.approvalReq;
-    const sent = !!state.d365;
-    const dirty = sent && d365Dirty();
-    const answered = !pend.length;
+    const answered = !!req && !pend.length;
+    const bk = planBook();
+    const balVal = bk.reduce((a, b) => a + balanceOf(b) * b.price, 0);
+    const apSel = answered ? selectable(app.map(o => bookFor(o.l.m.code))) : [];
 
     return `
       <div class="head">
         <div>
           <h2>Approval — ${esc(myName())}</h2>
-          <p>The approver works in their inbox, not in here. These lines go out as an email; their answer comes back over the API and lands on the same lines.</p>
+          <p>The approver works in their inbox, not in here. These lines go out as an email; their answer comes back over the API and lands on the same lines. Each approved line then gets its own Raise PR — rejected lines cannot be raised.</p>
         </div>
       </div>
 
       ${state.simulate ? `
       <div class="alertbar">
         <span class="pill p-mute">Dry run</span>
-        <span>A dry run cannot be sent for approval and cannot raise a PR. Run it for real from the calculate step when you want to act on it.</span>
+        <span>A dry run cannot be sent for approval and cannot raise a PR. Run it for real from Review MRP items when you want to act on it.</span>
       </div>` : ''}
 
-      ${sent ? `<div class="alertbar ${dirty ? 'crit' : ''}">
-        <span class="alert-i" aria-hidden="true">${dirty ? '!' : '✓'}</span>
-        <span>${dirty
-          ? `An approval changed after ${esc(state.d365.refs.join(', '))} went. Send it again and Dynamics is corrected.`
-          : `${esc(state.d365.refs.join(', '))} ${state.d365.refs.length === 1 ? 'is' : 'are'} in Dynamics — ${fmt(state.d365.count)} approved line${state.d365.count === 1 ? '' : 's'}.`}</span>
-      </div>` : req ? `
+      ${req ? `
       ${/* Between the send and the reply the screen is a receipt, not a form:
            the planner has nothing to do here but wait, so the only thing it
            offers is a way to see whether the answer has landed. */ ''}
@@ -9850,26 +9966,32 @@ ${unitBoardHtml()}
         <div class="stat ${orders.length ? 't-info' : 't-zero'}"><div class="v">${fmt(orders.length)}</div><div class="k label">Lines</div><div class="d">${aedM(val(orders))} asked for</div></div>
         <div class="stat ${app.length ? 't-good' : 't-zero'}"><div class="v">${fmt(app.length)}</div><div class="k label">Approved</div><div class="d">${aedM(val(app))}</div></div>
         <div class="stat ${rej.length ? 't-crit' : 't-zero'}"><div class="v">${fmt(rej.length)}</div><div class="k label">Rejected</div><div class="d">${rej.length ? 'Not sent on' : 'None'}</div></div>
-        <div class="stat ${pend.length ? 't-flag' : 't-zero'}"><div class="v">${fmt(pend.length)}</div><div class="k label">${req ? 'Awaiting reply' : 'Not sent'}</div><div class="d">${req ? 'With the approver' : 'Still with you'}</div></div>
+        ${answered
+          ? `<div class="stat ${balVal > 0 ? 't-flag' : 't-good'}"><div class="v">${aedM(balVal)}</div><div class="k label">Still to raise</div><div class="d">${fmt(planPrs().length)} PR${planPrs().length === 1 ? '' : 's'} raised so far</div></div>`
+          : `<div class="stat ${pend.length ? 't-flag' : 't-zero'}"><div class="v">${fmt(pend.length)}</div><div class="k label">${req ? 'Awaiting reply' : 'Not sent'}</div><div class="d">${req ? 'With the approver' : 'Still with you'}</div></div>`}
       </div>
 
       <div class="panel">
         <div class="panel-h">
           <div>
-            <h3>Lines for approval</h3>
-            <p>${req ? `As sent in ${esc(req.ref)}. The approver's answer is the last column.` : 'What the email will list once it is sent from the order list.'}</p>
+            <h3>${answered ? 'Approved lines — raise a PR against each' : 'Lines for approval'}</h3>
+            <p>${answered
+              ? `As answered on ${esc(req.ref)}. A PR does not have to cover the whole line: raise part of it now and the balance stays here for the next PR.`
+              : req ? `As sent in ${esc(req.ref)}. The approver's answer is the Status column.` : 'What the email will list once it is sent from the order list.'}</p>
           </div>
+          ${selButton(apSel)}
         </div>
         <div class="scroll"><table>
           <thead><tr>
-            <th>Material</th><th class="r">PR qty</th><th class="r col-val">Value</th>
-            <th>Status</th><th>Answered by</th>
+            ${selHead(apSel)}<th>Material</th><th class="r">Requirement</th><th class="r col-val">Value</th>
+            <th>Status</th><th>Answered by</th><th class="r">PR raised</th><th class="r">Balance</th><th></th>
           </tr></thead>
           <tbody>
-            ${orders.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:30px" class="muted">Nothing on the order list — there is nothing to send.</td></tr>' : ''}
+            ${orders.length === 0 ? '<tr><td colspan="9" style="text-align:center;padding:30px" class="muted">Nothing on the order list — there is nothing to send.</td></tr>' : ''}
             ${orders.map(o => {
               const a = approvalOf(o.l.m.code);
               return `<tr>
+                ${selCell(a && a.kind === 'approve' ? bookFor(o.l.m.code) : null, a && a.kind === 'reject' ? 'Rejected — cannot be raised' : null)}
                 <td style="max-width:46ch">
                   <div class="cell-code">${esc(o.l.m.code)}</div>
                   <div class="cell-desc">${esc(o.l.m.desc)}</div>
@@ -9884,6 +10006,14 @@ ${unitBoardHtml()}
                 <td class="muted" style="font-size: var(--fs-xs)">${a
                       ? `${esc(a.who || '')}${a.at ? ` · ${esc(dStamp(a.at))}` : ''}`
                       : '—'}</td>
+                ${(() => {
+                  const b = a && a.kind === 'approve' ? bookFor(o.l.m.code) : null;
+                  if (!b) return '<td class="r num muted">\u2014</td><td class="r num muted">\u2014</td>';
+                  const bal = balanceOf(b);
+                  return `<td class="r num">${fmt(raisedFor(b.id))}${prsFor(b.id).length ? `<div class="cell-desc">${fmt(prsFor(b.id).length)} PR${prsFor(b.id).length === 1 ? '' : 's'}</div>` : ''}</td>
+                    <td class="r num" ${bal > 0 ? 'style="color:var(--flag);font-weight: var(--w-semi)"' : ''}>${fmt(bal)}</td>`;
+                })()}
+                <td class="r" style="white-space:nowrap">${createPrCell(o.l.m.code)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -9892,108 +10022,27 @@ ${unitBoardHtml()}
 
       <div class="step-bar">
         <div class="step-row">
-          ${!req && !sent && !state.simulate ? `<button class="btn btn-p btn-lg btn-arrow step-b" data-step="${STEP_ORDERS}">Go to the order list to send it
+          ${!req && !state.simulate ? `<button class="btn btn-p btn-lg btn-arrow step-b" data-step="${STEP_ORDERS}">Go to the order list to send it
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
-          ${req && !answered && !sent ? '<button class="btn btn-p btn-lg step-b" id="apCheck">Check for a reply</button>' : ''}
-          ${req && answered && !sent && !state.simulate ? `<button class="btn btn-p btn-lg btn-arrow step-b" id="submitDemand" ${app.length ? '' : 'disabled'}>Send ${fmt(app.length)} approved line${app.length === 1 ? '' : 's'} to Dynamics
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
-            </svg>
-          </button>` : ''}
-          ${sent && dirty ? '<button class="btn btn-p btn-lg step-b" id="submitDemand">Send the change to Dynamics</button>' : ''}
+          ${req && !answered ? '<button class="btn btn-p btn-lg step-b" id="apCheck">Check for a reply</button>' : ''}
+          ${answered && bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-s btn-ghost" data-step="${STEP_ORDERS}">Back to the order list</button>
-          ${sent && !dirty ? '<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>' : ''}
+          ${cycleState().k === 'closed' ? '<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>' : ''}
         </div>
         <div class="step-sub">
           <p class="step-n">${state.simulate
             ? 'Dry run — nothing here can be sent for approval or become a PR.'
-            : sent
-            ? (dirty
-                ? 'The approved list no longer matches what went. Send it again and Dynamics is corrected.'
-                : 'The cycle is closed and archived — this list stays here for as long as you want it.')
             : !req
             ? `Nothing has gone out yet. The list is sent from the order list, where you can read it first — it goes to ${esc(approverFor(state.myUnit))} as an email they answer from their inbox.`
             : !answered
-            ? `Waiting on ${esc(req.to)}. Their answer arrives over the API and lands on these lines — nothing reaches Dynamics until it does.`
-            : `${fmt(app.length)} of ${fmt(orders.length)} approved · ${aedM(val(app))}${rej.length ? ` · ${fmt(rej.length)} rejected and not carried forward` : ''}`}</p>
+            ? `Waiting on ${esc(req.to)}. Their answer arrives over the API and lands on these lines — no PR can be created until it does.`
+            : `${fmt(app.length)} of ${fmt(orders.length)} approved · ${aedM(val(app))}${rej.length ? ` · ${fmt(rej.length)} rejected and not carried forward` : ''} · ${aedM(balVal)} still to raise`}</p>
         </div>
       </div>
     `;
-  }
-
-  // A fingerprint of the order list exactly as it stands: every line, quantity,
-  // week and decision. Comparing it against what was written is what separates
-  // "already saved" from "saved, then changed" — a line count alone would miss
-  // a quantity edit that leaves the count the same.
-  function orderSignature(orders) {
-    return orders.map(o => {
-      const a = approvalOf(o.l.m.code) || {};
-      return [o.l.m.code, o.qty, a.kind || 'waiting', a.reason || ''].join('~');
-    }).sort().join(';');
-  }
-
-  // What went to Dynamics was the approved list, so that is what a later
-  // comparison has to be against — an unapproved line changing is not a
-  // change to anything that left the building.
-  const d365Dirty = () => !!state.d365 && state.d365.sig !== orderSignature(approvedOrders());
-
-  // Phase 2 capability, shown here end to end. Nothing leaves the browser — the
-  // reference is generated locally, so this demonstrates the flow and the states
-  // around it, not a live Dynamics write.
-  function saveToD365() {
-    const orders = approvedOrders();
-    if (!orders.length) return;
-    const updating = !!state.d365;
-    state.fcLoading = {
-      t0: Date.now(), total: 1300,
-      msg: `${updating ? 'Updating the PR' : 'Raising the PR'} — ${fmt(orders.length)} lines in Dynamics 365`
-    };
-    render();
-    setTimeout(() => {
-      const batch = cycleId();
-      const refs = recordPr(orders, batch);
-      state.d365 = {
-        refs, batch,
-        at: new Date(),
-        sig: orderSignature(orders),
-        count: orders.length,
-        version: state.d365 ? state.d365.version + 1 : 1
-      };
-      state.fcLoading = null;
-      orderLogWrite('raised', { prRefs: refs.slice(), raisedAt: state.d365.at, rows: orderLogSnap() });
-      archiveCycle();
-
-      // Two facts, every run: it worked, and whether it went out whole. The
-      // partial is the one that needs saying out loud — a balance nobody was
-      // told about is a balance nobody raises.
-      const openLines = openBook();
-      const bal = openLines.length;
-      showToast(bal ? {
-        tone: 'flag',
-        t: `${refs.length} requisition${refs.length === 1 ? '' : 's'} raised \u2014 partly ordered`,
-        s: `${fmt(orders.length)} lines sent to Dynamics, which converts them into purchase orders. ${bal} line${bal === 1 ? '' : 's'} went out for less than the requirement, leaving ${aedM(openValue())} to raise a PR for.`,
-        label: bal === 1 ? `Raise a PR for the remaining ${fmt(balanceOf(openLines[0]))}` : 'Raise the balance',
-        step: PAGE_CALLOFFS,
-        open: bal === 1 ? openLines[0].id : null,
-        link: 'Requisition history'
-      } : {
-        tone: 'good',
-        t: `${refs.length} requisition${refs.length === 1 ? '' : 's'} raised successfully`,
-        s: `${fmt(orders.length)} lines sent to Dynamics in full \u2014 ${esc(refs.join(', '))}. Dynamics converts each into a purchase order.`,
-        label: 'Requisition history',
-        step: PAGE_CALLOFFS
-      }, bal ? 14000 : 9000);
-      // Raising the PR no longer moves the planner anywhere. They finished the
-      // cycle on the order list and that is where the result belongs — being
-      // thrown onto a different page is a worse confirmation than staying put
-      // and being told. The toast carries the link to the history for anyone
-      // who wants it, and the reference is pre-expanded for when they follow it.
-      state.poOpen = refs[0] || null;
-      render();
-    }, 1300);
   }
 
   // A closed cycle is the record of what was actually ordered, and it has to
@@ -10078,8 +10127,9 @@ ${unitBoardHtml()}
     draft:      { t:'Draft',           tone:'p-info', d:'Worked out, not sent' },
     sent:       { t:'With approver',   tone:'p-flag', d:'Waiting on their reply' },
     partly:     { t:'Partly approved', tone:'p-flag', d:'Some lines were rejected' },
-    approved:   { t:'Approved',        tone:'p-good', d:'Answered in full, not yet raised' },
-    raised:     { t:'Raised',          tone:'p-good', d:'Requisitions are in Dynamics' },
+    approved:   { t:'Approved',        tone:'p-good', d:'Answered in full, no PR yet' },
+    inpr:       { t:'PR in progress',  tone:'p-flag', d:'Approved lines still have a balance' },
+    raised:     { t:'Fully raised',    tone:'p-good', d:'Every approved line is on a PR' },
     superseded: { t:'Superseded',      tone:'p-mute', d:'A later plan replaced it' }
   };
   // A line the approver turned down was a real requirement — the engine asked
@@ -10098,9 +10148,20 @@ ${unitBoardHtml()}
     return out.sort((a, b) => new Date(b.at) - new Date(a.at));
   }
 
+  // Where a list stands. Past approval that is read off its PRs rather than
+  // stored, so a PR raised from any screen moves the list along with it.
+  const olBook = o => o.apRef ? state.book.filter(b => b.batch === o.apRef) : [];
+  function olStatus(o) {
+    if (o.status !== 'approved' && o.status !== 'partly') return o.status;
+    const bk = olBook(o);
+    if (bk.length && bk.every(b => balanceOf(b) <= 0)) return 'raised';
+    if (bk.some(b => raisedFor(b.id) > 0)) return 'inpr';
+    return o.status;
+  }
+
   // Anything still carrying work. Raised and superseded are both endings.
   const openOrderLists = () => state.orderLog.filter(o =>
-    o.unit === state.myUnit && o.status !== 'raised' && o.status !== 'superseded');
+    o.unit === state.myUnit && olStatus(o) !== 'raised' && olStatus(o) !== 'superseded');
 
   function saveFcLog() {
     try { localStorage.setItem(FC_KEY, JSON.stringify(state.fcLog)); } catch (e) { /* private mode */ }
@@ -10172,31 +10233,6 @@ ${unitBoardHtml()}
   function savePrs() {
     try { localStorage.setItem(PR_KEY, JSON.stringify({ book: state.book, prs: state.prs, demoCleared: !!state.demoCleared })); } catch (e) { /* private mode */ }
   }
-  // ILLUSTRATIVE. The case from the 20 August review, worked through: a
-  // requirement of 175,000, a first order for 75,000, and 100,000 left pending
-  // — "then I have a balance 100,000, so that will go to another PR". It is
-  // dated to the August cycle so it also shows the part nothing else can: a
-  // balance outliving the cycle that produced it. Both rows are flagged as an
-  // example on screen and can be cleared in one click.
-  // The partial-order case, carried by THIS cycle rather than by a pair of rows
-  // seeded into last August. The review put it plainly — 175,000 asked for,
-  // 75,000 ordered, "then I have a balance 100,000, so that will go to another
-  // PR" — and it only lands if the planner watches their own run produce it.
-  //
-  // Pre-set, not silent: it fills the "Raise now" figure in the review drawer,
-  // which is the same field the planner would type into, so it is visible on the
-  // line before the order list exists and can be put back to the full quantity.
-  // Skipped entirely if they have already set one.
-  const PARTIAL_DEMO_CODE = 'FPWF1JRSXKG50';
-  const PARTIAL_DEMO_QTY = 75000;
-  function seedPartialCallOff() {
-    if (state.callOff[PARTIAL_DEMO_CODE] != null) return;
-    const l = (state.lines || []).find(x => x.m.code === PARTIAL_DEMO_CODE);
-    if (!l || l.excluded || l.prQty <= PARTIAL_DEMO_QTY) return;
-    state.callOff[PARTIAL_DEMO_CODE] = PARTIAL_DEMO_QTY;
-  }
-
-
   // The banner that offered to clear these is gone — the Example pill on each
   // row says the same thing in place, and said it without a block of prose at
   // the top of the page. `demoCleared` is still read on load, so anyone who
@@ -10211,10 +10247,8 @@ ${unitBoardHtml()}
       state.prs  = (raw.prs  || []).map(r => ({ ...r, at: new Date(r.at), status: r.status || 'pr' }));
       state.demoCleared = !!raw.demoCleared;
     } catch (e) { state.book = []; state.prs = []; state.demoCleared = false; }
-    // The seeded August rows are gone: the partial case is demonstrated by the
-    // planner's own cycle now (see seedPartialCallOff), which is a better
-    // example than one that arrived pre-made and could never be produced.
-
+    // The seeded August rows are gone: the partial case is the planner's own —
+    // they create a PR for part of an approved line on the Create PR screen.
   }
 
   // What this app raises is a purchase requisition. Dynamics is what turns one
@@ -10226,7 +10260,9 @@ ${unitBoardHtml()}
   // it belongs to a balance rather than to a requisition — nothing has been
   // raised for it yet, which is exactly what the status says.
   const PR_STATUS = {
-    need: { t:'Need to raise PR', p:'p-act',  d:'No requisition covers this balance yet' },
+    need: { t:'Need to raise PR', p:'p-act',  d:'Approved, no PR raised yet' },
+    part: { t:'Partly raised',    p:'p-flag', d:'Some of it is on a PR, the rest is not' },
+    full: { t:'Fully raised',     p:'p-good', d:'The whole line is on PRs' },
     pr:   { t:'Pending',          p:'p-flag', d:'Raised, waiting on Dynamics to issue the PO' },
     po:   { t:'PO issued',        p:'p-good', d:'Dynamics has issued the purchase order' }
   };
@@ -10332,58 +10368,41 @@ ${unitBoardHtml()}
     return pre + String(n).padStart(4, '0');
   };
 
-  // How much of this line goes on the PR about to be raised: all of it, unless
-  // the planner said otherwise on the review step.
-  const callOffQty = o => {
-    const set = state.callOff[o.l.m.code];
-    return set == null ? o.qty : Math.max(0, Math.min(Math.round(set), o.qty));
-  };
+  // This plan's lines in the book, and the PRs raised against them.
+  // Keyed by the approval request, not the plan: every send for approval is a
+  // fresh demand list, so PRs raised against an earlier approval of the same
+  // plan stay in the history and never show up already raised on a new one.
+  const demandBatch = () => state.approvalReq ? state.approvalReq.ref : null;
+  const planBook = () => state.book.filter(b => b.unit === state.myUnit && b.batch === demandBatch());
+  const planPrs = () => state.prs.filter(r => r.unit === state.myUnit && r.batch === demandBatch());
+  // The book line behind an order line on this plan, once it has been approved.
+  const bookFor = code => demandBatch() && state.book.find(b => b.id === `${demandBatch()}-${code}`) || null;
 
-  // Written when the cycle sends its requirement. The book entry carries the
-  // full requirement; the PR carries only what was called off.
-  function recordPr(orders, batch) {
-    const bySup = {};
-    orders.forEach(o => {
-      const id = `${cycleId()}-${o.l.m.code}`;
-      const sup = supplierOf(o.l.m);
+  // An approved line is demand the planner raises PRs against, one at a time
+  // and for as much of it as they need now (review of 16 Sept 2026: "against
+  // one demand order they can create multiple PRs"). So approval writes the
+  // book, and nothing is raised until the planner asks for it.
+  function registerDemand() {
+    const batch = demandBatch();
+    if (!batch) return;
+    const approved = approvedOrders();
+    const codes = new Set(approved.map(o => o.l.m.code));
+    // A line that is no longer approved leaves the book, unless a PR was
+    // already raised against it — that PR happened, and its line stays with it.
+    state.book = state.book.filter(b => b.batch !== batch || codes.has(b.code) || raisedFor(b.id) > 0);
+    approved.forEach(o => {
+      const id = `${batch}-${o.l.m.code}`;
       const ex = state.book.find(b => b.id === id);
-      // The batch is stored on the book line so a balance raised against it can
-      // be tagged with the same one — see writeBalancePr.
-      if (ex) { ex.req = o.qty; ex.supplier = sup; ex.batch = batch; }   // a re-send corrects the requirement
-      else state.book.push({ id, code:o.l.m.code, desc:o.l.m.desc, uom:o.l.m.uom, supplier:sup,
-        unit:state.myUnit, cycle:cycleName(), req:o.qty, price:o.l.m.price, at:new Date(), batch });
-      const q = callOffQty(o);
-      if (q > 0) (bySup[sup] = bySup[sup] || []).push({ id, code:o.l.m.code, qty:q });
+      if (ex) { ex.req = Math.max(o.qty, raisedFor(id)); return; }
+      state.book.push({ id, code:o.l.m.code, desc:o.l.m.desc, uom:o.l.m.uom, supplier:supplierOf(o.l.m),
+        unit:state.myUnit, cycle:cycleName(), req:o.qty, price:o.l.m.price, at:new Date(), batch,
+        apRef: state.approvalReq ? state.approvalReq.ref : null });
     });
-    // A re-send replaces the orders this cycle wrote before rather than stacking
-    // a second set beside them — the refs come back the same because the ones
-    // they replaced are gone by the time they are numbered.
-    //
-    // This clears balance PRs too, and it has to. They carry the same batch, so
-    // running the cycle again starts that line's ledger over. Without it the
-    // previous run's balance PR survived while its cycle PR was replaced, both
-    // counted against one requirement, and balanceOf collapsed to zero — the
-    // partial line simply vanished on the second run.
-    state.prs = state.prs.filter(r => r.batch !== batch);
-    Object.keys(bySup).sort().forEach(sup => {
-      state.prs.push({ ref: nextPrRef(), at:new Date(), unit:state.myUnit, cycle:cycleName(),
-                       supplier:sup, batch, first:true, status:'pr', lines: bySup[sup] });
-    });
-    // Dynamics converts requisitions on its own schedule, so a batch is normally
-    // mixed — some approved and released overnight, others still with an
-    // approver. A batch that is uniformly Pending shows the status column doing
-    // nothing, which is not what the real page looks like on any given morning.
-    // The first requisition of the batch comes back converted; the rest wait,
-    // and the Check Dynamics button moves them. Demo seed, not a rule.
-    const mine = state.prs.filter(r => r.batch === batch);
-    if (mine.length > 1) mine[0].status = 'po';
     savePrs();
-    return state.prs.filter(r => r.batch === batch).map(r => r.ref);
   }
 
-  // A later call-off against a balance that is already in the book.
-  // The write itself, with no interface around it. Kept separate so a batch can
-  // put several through under one trip to Dynamics rather than one each.
+  // One PR, one line, one quantity. Refs are numbered in the order raised, so
+  // two PRs against the same line read as PR 1 and PR 2 of it.
   function writeBalancePr(id, qty) {
     const b = state.book.find(x => x.id === id);
     if (!b) return null;
@@ -10391,54 +10410,85 @@ ${unitBoardHtml()}
     if (!q) return null;
     const ref = nextPrRef();
     state.prs.push({ ref, at:new Date(), unit:b.unit, cycle:b.cycle, supplier:b.supplier,
-                     batch: b.batch, first:false, status:'pr', lines:[{ id, code:b.code, qty:q }] });
+                     batch: b.batch, seq: prsFor(id).length + 1, status:'pr', lines:[{ id, code:b.code, qty:q }] });
     delete state.coDraft[id];
     return { ref, b, q };
   }
 
-  // Raising a balance is a requisition going to Dynamics, exactly like the one
-  // the cycle raised — so it gets the same treatment, and the line moves from
-  // "Need to raise PR" to "Pending". It used to happen instantly and silently: the form
-  // closed, a row appeared in a table further up the page, and nothing said so.
-  function raiseBalance(id, qty) { commitBalances([{ id, qty }]); }
+  // Nothing is raised on approval. The planner raises each PR by hand — from
+  // a line's own Raise PR, or by ticking the lines they want and raising those.
+  function openCreatePr(id, back) { openCreatePrs([id], back); }
+  function openCreatePrs(ids, back) {
+    ids = ids.filter(id => { const b = state.book.find(x => x.id === id); return b && balanceOf(b) > 0; });
+    if (!ids.length) return;
+    state.newPr = { ids, back: back == null ? state.step : back };
+    state.maxStep = Math.max(state.maxStep, PAGE_NEWPR);
+    go(PAGE_NEWPR);
+  }
 
-  function commitBalances(items) {
-    const planned = items.filter(x => {
-      const b = state.book.find(y => y.id === x.id);
-      return b && Math.min(Math.round(x.qty || 0), balanceOf(b)) > 0;
-    });
-    if (!planned.length) return;
-    const lines = planned.length;
+  // A checkbox on every line. One that cannot be raised — not approved yet,
+  // rejected, or fully raised — is greyed out with the reason on hover.
+  const selectable = bs => bs.filter(b => b && balanceOf(b) > 0).map(b => b.id);
+  function selCell(b, why) {
+    if (!b || balanceOf(b) <= 0) {
+      const t = why || (b ? 'Fully raised' : 'Available once the approver has approved this line');
+      return `<td style="width:34px"><input type="checkbox" disabled title="${esc(t)}" aria-label="${esc(t)}"></td>`;
+    }
+    return `<td style="width:34px"><input type="checkbox" data-prsel="${esc(b.id)}" ${state.prSel.includes(b.id) ? 'checked' : ''}
+      aria-label="Select ${esc(b.code)} to raise a PR"></td>`;
+  }
+  function selHead(ids) {
+    if (!ids.length) return `<th style="width:34px"><input type="checkbox" disabled aria-label="No line can be raised yet" title="No line can be raised yet"></th>`;
+    const all = ids.every(id => state.prSel.includes(id));
+    return `<th style="width:34px"><input type="checkbox" data-prsel-all="${esc(ids.join(','))}" ${all ? 'checked' : ''}
+      aria-label="Select every line that can be raised"></th>`;
+  }
+  function selButton(ids) {
+    const n = state.prSel.filter(id => ids.includes(id)).length;
+    return `<div class="rowflex" style="gap:10px;flex-wrap:nowrap;flex-shrink:0;white-space:nowrap">
+      <span class="muted" style="font-size: var(--fs-xs)">${!ids.length ? 'Lines can be raised once approved'
+        : n ? `${fmt(n)} of ${fmt(ids.length)} selected` : 'Tick the lines to raise'}</span>
+      <button class="btn btn-s btn-p" data-prsel-go="${esc(ids.join(','))}" ${n ? '' : 'disabled'}>Raise PR for ${n ? fmt(n) : ''} selected</button>
+    </div>`;
+  }
+
+  // Raising is a requisition going to Dynamics, so it gets the same wait and
+  // the same confirmation wherever it starts. It lands on PR status, which is
+  // where the review said a raised PR should be seen.
+  function createPrs(items) {
+    const n = items.length;
     state.fcLoading = { t0: Date.now(), total: 1100,
-      msg: `Raising ${lines === 1 ? 'the requisition' : `${fmt(lines)} requisitions`} in Dynamics 365` };
+      msg: n === 1 ? 'Raising the requisition in Dynamics 365' : `Raising ${fmt(n)} requisitions in Dynamics 365` };
     render();
     setTimeout(() => {
-      const made = planned.map(x => writeBalancePr(x.id, x.qty)).filter(Boolean);
+      const made = items.map(x => writeBalancePr(x.id, x.qty)).filter(Boolean);
       savePrs();
-      state.coOpen = null;
       state.fcLoading = null;
       if (!made.length) { render(); return; }
-
-      // What is left on the line the planner just ordered against decides the
-      // wording: a balance closed reads differently from one merely reduced.
-      const left = openBook();
-      const first = made[0];
-      const stillOpen = left.find(x => x.id === first.b.id);
-      showToast({
+      if (state.approvalReq && !planBook().some(b => balanceOf(b) > 0)) archiveCycle();
+      const ids = made.map(m => m.b.id);
+      state.prSel = state.prSel.filter(id => !ids.includes(id));
+      const first = made[0], left = balanceOf(first.b), u = esc(first.b.uom || '');
+      const stillOpen = made.filter(m => balanceOf(m.b) > 0).length;
+      showToast(made.length === 1 ? {
+        tone: left ? 'flag' : 'good',
+        t: `${esc(first.ref)} raised for ${fmt(first.q)} ${u}`,
+        s: left
+          ? `${esc(first.b.code)} — ${fmt(raisedFor(first.b.id))} of ${fmt(first.b.req)} ${u} raised so far, ${fmt(left)} still to raise.`
+          : `${esc(first.b.code)} is now fully raised.`,
+        label: left ? `Raise a PR for the remaining ${fmt(left)}` : null,
+        open: left ? first.b.id : null,
+        step: PAGE_CALLOFFS
+      } : {
         tone: stillOpen ? 'flag' : 'good',
-        t: made.length === 1
-          ? `${esc(first.ref)} raised for ${fmt(first.q)} ${esc(first.b.uom || '')}`
-          : `${fmt(made.length)} requisitions raised`,
-        s: made.length === 1
-          ? (stillOpen
-              ? `${esc(first.b.code)} \u2014 ${fmt(balanceOf(stillOpen))} ${esc(first.b.uom || '')} of the ${fmt(first.b.req)} requirement is still to order.`
-              : `${esc(first.b.code)} is now fully ordered \u2014 ${fmt(first.b.req)} ${esc(first.b.uom || '')} against ${esc(first.b.supplier || 'the supplier')}.`)
-          : `${aedM(made.reduce((a, m) => a + m.q * (m.b.price || 0), 0))} sent to Dynamics for conversion${left.length ? ` \u2014 ${aedM(openValue())} still to raise.` : ' \u2014 nothing left pending.'}`,
-        label: left.length ? 'See what is left' : null,
-        step: left.length ? PAGE_CALLOFFS : null,
-        open: left.length === 1 ? left[0].id : null
-      }, stillOpen || left.length ? 11000 : 8000);
-      render();
+        t: `${fmt(made.length)} PRs raised`,
+        s: `${esc(made.map(m => m.ref).join(', '))} — one per line.${stillOpen ? ` ${fmt(stillOpen)} still ${stillOpen === 1 ? 'has' : 'have'} a balance to raise.` : ''}`,
+        step: PAGE_CALLOFFS
+      }, 11000);
+      state.newPr = null;
+      state.poOpen = made.length === 1 ? first.ref : null;
+      state.maxStep = Math.max(state.maxStep, PAGE_CALLOFFS);
+      go(PAGE_CALLOFFS);
     }, 1100);
   }
 
@@ -10474,8 +10524,7 @@ ${unitBoardHtml()}
       fcVersion: state.run ? state.run.fcVersion : state.forecastVersion,
       fcFile: v ? v.file : null,
       runNo: state.run ? state.run.no : null,
-      pr: state.d365 ? state.d365.refs.join(', ') : null,
-      prVersion: state.d365 ? state.d365.version : null,
+      pr: planPrs().map(r => r.ref).join(', ') || null,
       lines: orders.length,
       value: orders.reduce((a, o) => a + o.qty * o.l.m.price, 0),
       decided: orders.filter(o => !o.auto).length,
@@ -10974,7 +11023,13 @@ ${unitBoardHtml()}
           // whatever an approver said was said about different numbers.
           if (!state.simulate) {
             const ord = buildOrders();
+            const prevOl = state.orderLog.find(o => o.id === cycleId());
+            const olVal = ord.reduce((a, o) => a + o.qty * o.l.m.price, 0);
             orderLogWrite('draft', {
+              // Every run that rewrote this list, so its history survives the
+              // rewrite (review of 16 Sept 2026).
+              runs: [...((prevOl && prevOl.runs) || []),
+                     { no: state.run.no, at: new Date(), lines: ord.length, value: olVal }],
               runNo: state.run.no, fcVersion: state.run.fcVersion,
               lines: ord.length, value: ord.reduce((a, o) => a + o.qty * o.l.m.price, 0),
               rows: orderLogSnap(), apRef: null, to: null, sentAt: null, answeredAt: null,
@@ -10982,7 +11037,6 @@ ${unitBoardHtml()}
             });
           }
 
-          seedPartialCallOff();
           state.maxStep = Math.max(state.maxStep, STEP_REVIEW);
           // Straight to the decisions, every run. Landing on a summary first
           // put a screen between the planner and the work whose whole content
@@ -11595,14 +11649,6 @@ ${unitBoardHtml()}
     const adjApply = $('#adjApply');
     if (adjApply) adjApply.onclick = applyAdjustments;
 
-    // Raise every outstanding balance at once. Each still goes out as its own PR
-    // against its own supplier — this is a shortcut through the list, not a
-    // different kind of order.
-    const balAll = $('#prBalAll');
-    if (balAll) balAll.onclick = () => {
-      commitBalances(openBook().map(b => ({ id: b.id, qty: balanceOf(b) })));
-    };
-
     // The working behind one PR line, opened in place on the order list.
     document.querySelectorAll('[data-ordwork]').forEach(b => b.onclick = () => {
       const c = b.dataset.ordwork;
@@ -11810,7 +11856,7 @@ ${unitBoardHtml()}
     });
 
     document.querySelectorAll('[data-ol]').forEach(b => b.onclick = () => {
-      state.olOpen = state.olOpen === b.dataset.ol ? null : b.dataset.ol;
+      state.olOpen = b.getAttribute('aria-expanded') === 'true' ? '' : b.dataset.ol;
       render();
     });
 
@@ -11875,14 +11921,6 @@ ${unitBoardHtml()}
     if (ca) ca.onchange = () => { state.cmpA = ca.value; render(); };
     if (cb) cb.onchange = () => { state.cmpB = cb.value; render(); };
 
-    // The write used to fire the moment this step rendered, on the reasoning
-    // that accepting the lines was already the decision. It meant the order
-    // list could not be read before it went: arriving on the page and sending
-    // it to Dynamics were the same event. Reviewing a compiled order before it
-    // reaches the ERP is the normal way round, so it is a button now.
-    const sub = $('#submitDemand');
-    if (sub) sub.onclick = () => saveToD365();
-
     // ---- step 6, approval ----
     const toAp = $('#toApprove');
     if (toAp) toAp.onclick = () => { state.maxStep = Math.max(state.maxStep, STEP_APPROVE); go(STEP_APPROVE); };
@@ -11898,7 +11936,7 @@ ${unitBoardHtml()}
       if (!orders.length || state.simulate) return;
       const to = approverFor(state.myUnit);
       state.approvalReq = {
-        ref: `AP-${cycleId()}`.toUpperCase(),
+        ref: nextApRef(),
         to, at: new Date(),
         count: orders.length,
         value: orders.reduce((x, o) => x + o.qty * o.l.m.price, 0)
@@ -11927,7 +11965,7 @@ ${unitBoardHtml()}
       // Pinned before the label is swapped: the waiting text is longer, and a
       // button that grows under the cursor reads as the bar rebuilding itself.
       apCheck.style.minWidth = apCheck.offsetWidth + 'px';
-      apCheck.innerHTML = '<span class="spin-s" aria-hidden="true"></span>Checking with ' + esc(req.to);
+      apCheck.innerHTML = '<span class="spin-s" aria-hidden="true"></span>Checking for a reply';
       setTimeout(() => finishApCheck(req), 1100);
     };
 
@@ -11938,8 +11976,11 @@ ${unitBoardHtml()}
       // rejected path has its own state on three screens and a planner testing
       // this has to be able to reach it. On a list long enough for one line to
       // be arguable, the dearest one comes back refused.
+      // FPWF1JRSXKG50 is kept approved: it is the 175,000 line the review used
+      // to walk through a 75,000 PR followed by a 50,000 one.
       const no = orders.length >= 5
-        ? orders.slice().sort((a, b) => (b.qty * b.l.m.price) - (a.qty * a.l.m.price))[0]
+        ? orders.filter(o => o.l.m.code !== 'FPWF1JRSXKG50')
+            .sort((a, b) => (b.qty * b.l.m.price) - (a.qty * a.l.m.price))[0]
         : null;
       orders.forEach(o => {
         if (state.approvals[o.l.m.code]) return;
@@ -11949,6 +11990,8 @@ ${unitBoardHtml()}
       });
       const rej = orders.filter(o => (approvalOf(o.l.m.code) || {}).kind === 'reject').length;
       const ok = orders.length - rej;
+      registerDemand();
+      archiveCycle();
       orderLogWrite(rej ? 'partly' : 'approved', { answeredAt: at, rejected: rej, rows: orderLogSnap() });
       logChange('cycle', `Approval reply · ${req.ref}`, 'awaiting reply',
         rej ? `${ok} approved, ${rej} rejected by ${req.to}` : `approved by ${req.to}`,
@@ -11956,11 +11999,10 @@ ${unitBoardHtml()}
       showToast(rej ? {
         tone:'flag',
         t:`${req.to} approved ${fmt(ok)} of ${fmt(orders.length)}`,
-        s:`${fmt(rej)} line${rej === 1 ? '' : 's'} came back refused — ${esc(APPROVAL_REASONS[0].toLowerCase())}. Nothing is raised for those; they are listed on PR status so the need is not lost.`,
-        label:'See the rejected lines', step: PAGE_CALLOFFS
+        s:`${fmt(rej)} line${rej === 1 ? '' : 's'} came back refused — ${esc(APPROVAL_REASONS[0].toLowerCase())}. No PR can be created for those. Every approved line now has a Raise PR button.`
       } : {
         tone:'good', t:`${req.to} approved all ${fmt(ok)} line${ok === 1 ? '' : 's'}`,
-        s:'The reply came back against ' + req.ref + '. The approved lines can go to Dynamics.'
+        s:'The reply came back against ' + req.ref + '. Every line now has a Raise PR button — raise each one for as much as you need now.'
       }, 9000);
       render();
     }
@@ -11979,16 +12021,16 @@ ${unitBoardHtml()}
         const n = +x.dataset.notifStep;
         state.notifOpen = false;
         state.maxStep = Math.max(state.maxStep, n);
-        // A notice that names one line lands on that line with its raise form
-        // already open. Dropping the planner on the page and leaving them to
-        // find the row again is most of the work the notice was meant to save.
-        state.coOpen = x.dataset.notifOpen || null;
+        // A notice that names one line lands on that line's Create PR screen.
+        // Dropping the planner on the page and leaving them to find the row
+        // again is most of the work the notice was meant to save.
+        if (x.dataset.notifOpen) { openCreatePr(x.dataset.notifOpen, n); return; }
         go(n);
       });
     }
 
     const ps = $('#poSup');
-    if (ps) ps.onchange = () => { state.poSup = ps.value; state.poOpen = null; state.coOpen = null; render(); };
+    if (ps) ps.onchange = () => { state.poSup = ps.value; state.poOpen = null; render(); };
 
     const dsync = $('#d365Sync');
     if (dsync) dsync.onclick = () => syncD365();
@@ -11998,24 +12040,78 @@ ${unitBoardHtml()}
       render();
     });
 
-    document.querySelectorAll('[data-co]').forEach(b => b.onclick = () => {
-      state.coOpen = state.coOpen === b.dataset.co ? null : b.dataset.co;
+    document.querySelectorAll('[data-co]').forEach(b => b.onclick = () => openCreatePr(b.dataset.co));
+
+    // The Create PR screen. The value and the balance after are repainted as
+    // the quantity is typed rather than on a render, so the field keeps focus.
+    const npIn = $('#npQty');
+    if (npIn && state.newPr) {
+      const e = state.book.find(x => x.id === (state.newPr.ids || [state.newPr.id])[0]);
+      const paint = () => {
+        const bal = balanceOf(e);
+        const q = Math.max(0, Math.min(Math.round(+npIn.value || 0), bal));
+        state.coDraft[e.id] = +npIn.value || 0;
+        $('#npVal').innerHTML = aed(q * e.price);
+        $('#npAfter').textContent = `${fmt(bal - q)} ${e.uom || ''}`;
+        $('#npAfter').style.color = bal - q > 0 ? 'var(--flag)' : 'var(--good)';
+        const over = (+npIn.value || 0) > bal;
+        $('#npWarn').textContent = over ? `Only ${fmt(bal)} ${e.uom || ''} is left to raise on this line.` : '';
+        $('#npGo').disabled = q <= 0 || over;
+      };
+      npIn.oninput = paint;
+      paint();
+      const all = $('#npAll');
+      if (all) all.onclick = () => { npIn.value = balanceOf(e); paint(); };
+      $('#npGo').onclick = () => {
+        const q = Math.round(+npIn.value || 0);
+        if (q > 0 && q <= balanceOf(e)) createPrs([{ id: e.id, qty: q }]);
+      };
+    }
+
+    const npMany = $('#npGoMany');
+    if (npMany) {
+      const ins = [...document.querySelectorAll('[data-npq]')];
+      const bookOf = i => state.book.find(x => x.id === i.dataset.npq);
+      const paintAll = () => {
+        let total = 0, bad = false;
+        ins.forEach(i => {
+          const e = bookOf(i), bal = balanceOf(e), v = +i.value;
+          state.coDraft[e.id] = i.value === '' ? 0 : v;
+          const why = i.value === '' || !isFinite(v) ? 'Enter a quantity' : v <= 0 ? 'At least 1'
+            : !Number.isInteger(v) ? 'Whole number' : v > bal ? `Only ${fmt(bal)} left` : '';
+          bad = bad || !!why;
+          if (!why) total += v * e.price;
+          document.querySelector(`[data-npv="${CSS.escape(e.id)}"]`).innerHTML = why ? '—' : aed(v * e.price);
+          const a = document.querySelector(`[data-npa="${CSS.escape(e.id)}"]`);
+          a.textContent = why ? '—' : fmt(bal - v);
+          a.style.color = why ? '' : bal - v > 0 ? 'var(--flag)' : 'var(--good)';
+          document.querySelector(`[data-npw="${CSS.escape(e.id)}"]`).textContent = why;
+        });
+        $('#npTotal').innerHTML = `${aed(total)} across ${fmt(ins.length)} PRs`;
+        npMany.disabled = bad;
+      };
+      ins.forEach(i => { i.oninput = paintAll; });
+      paintAll();
+      npMany.onclick = () => createPrs(ins.map(i => ({ id: i.dataset.npq, qty: +i.value })));
+    }
+
+    document.querySelectorAll('[data-prsel]').forEach(c => c.onchange = () => {
+      const id = c.dataset.prsel;
+      state.prSel = c.checked ? [...new Set([...state.prSel, id])] : state.prSel.filter(x => x !== id);
       render();
     });
-    document.querySelectorAll('[data-co-in]').forEach(i => i.oninput = () => {
-      state.coDraft[i.dataset.coIn] = +i.value || 0;
+    document.querySelectorAll('[data-prsel-all]').forEach(c => c.onchange = () => {
+      const ids = c.dataset.prselAll.split(',');
+      state.prSel = c.checked ? [...new Set([...state.prSel, ...ids])] : state.prSel.filter(x => !ids.includes(x));
+      render();
     });
-    document.querySelectorAll('[data-co-all]').forEach(b => b.onclick = () => {
-      const e = state.book.find(x => x.id === b.dataset.coAll);
-      if (e) raiseBalance(e.id, balanceOf(e));
+    document.querySelectorAll('[data-prsel-go]').forEach(bt => bt.onclick = () => {
+      const ids = bt.dataset.prselGo.split(',');
+      openCreatePrs(state.prSel.filter(id => ids.includes(id)));
     });
-    document.querySelectorAll('[data-co-go]').forEach(b => b.onclick = () => {
-      const id = b.dataset.coGo;
-      const e = state.book.find(x => x.id === id);
-      if (!e) return;
-      const q = state.coDraft[id] == null ? balanceOf(e) : state.coDraft[id];
-      raiseBalance(id, q);
-    });
+
+    const npCancel = $('#npCancel');
+    if (npCancel) npCancel.onclick = () => { const back = state.newPr ? state.newPr.back : PAGE_CALLOFFS; state.newPr = null; go(back); };
 
     const so = $('#signOut');
     if (so) so.onclick = e => {

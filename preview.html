@@ -2464,6 +2464,10 @@
 
   /* Inter like the rest of the table; tabular figures keep codes of the same
      length lining up, and the weight lets the code lead its description. */
+  /* The forecast grid mixes plain text with input boxes for the months; the
+     boxes are taller, so every cell centres on the row rather than its top. */
+  .gridtable td { vertical-align: middle; }
+  .gridtable td.c-desc { font-size: var(--fs-sm); }
   .cell-code { font-family: inherit; font-size: var(--fs-sm); font-weight: var(--w-med); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
   /* The mapping and preview tables mark whole cells as data, not just codes.
      There every cell reads at the size of the dropdowns beside them, with only

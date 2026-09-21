@@ -9981,14 +9981,6 @@ ${unitBoardHtml()}
         </span>
       </div>` : ''}
 
-      <div class="stats tight">
-        <div class="stat ${orders.length ? 't-info' : 't-zero'}"><div class="v">${fmt(orders.length)}</div><div class="k label">Lines</div><div class="d">${aedM(val(orders))} asked for</div></div>
-        <div class="stat ${app.length ? 't-good' : 't-zero'}"><div class="v">${fmt(app.length)}</div><div class="k label">Approved</div><div class="d">${aedM(val(app))}</div></div>
-        <div class="stat ${rej.length ? 't-crit' : 't-zero'}"><div class="v">${fmt(rej.length)}</div><div class="k label">Rejected</div><div class="d">${rej.length ? 'Not sent on' : 'None'}</div></div>
-        ${answered
-          ? `<div class="stat ${balVal > 0 ? 't-flag' : 't-good'}"><div class="v">${aedM(balVal)}</div><div class="k label">Still to raise</div><div class="d">${fmt(planPrs().length)} PR${planPrs().length === 1 ? '' : 's'} raised so far</div></div>`
-          : `<div class="stat ${pend.length ? 't-flag' : 't-zero'}"><div class="v">${fmt(pend.length)}</div><div class="k label">${req ? 'Awaiting reply' : 'Not sent'}</div><div class="d">${req ? 'With the approver' : 'Still with you'}</div></div>`}
-      </div>
 
       <div class="panel">
         <div class="panel-h">

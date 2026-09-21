@@ -4969,7 +4969,7 @@
                cta:'Send for approval', step:STEP_APPROVE };
     }
     if (waiting) return { k:'review', title:`Waiting on ${state.approvalReq.to}`,
-                          detail:`${state.approvalReq.ref} went out on ${dStamp(state.approvalReq.at)}. Their answer arrives over the API \u2014 nothing reaches Dynamics until it does.`,
+                          detail:`${state.approvalReq.ref} went out on ${dStamp(state.approvalReq.at)}. Once they approve it in the email it will be reflected here \u2014 nothing reaches Dynamics until then.`,
                           cta:'Check for a reply', step:STEP_APPROVE };
     const need = planBook().filter(b => balanceOf(b) > 0);
     return { k:'complete', title:`${need.length} approved line${need.length === 1 ? '' : 's'} to create a PR for`,
@@ -5048,7 +5048,7 @@
       if (state.maxStep >= STEP_APPROVE && waiting > 0) {
         out.push(state.approvalReq
           ? { tone:'flag', t:`${state.approvalReq.ref} is with ${state.approvalReq.to}`,
-              s:'Their answer arrives over the API and lands on the lines. Nothing reaches Dynamics until it does.', step: STEP_APPROVE }
+              s:'Once they approve it in the email it will be reflected here. Nothing reaches Dynamics until then.', step: STEP_APPROVE }
           : { tone:'flag', t:`${waiting} lines have not gone for approval yet`,
               s:`They go to ${approverFor(state.myUnit)} as an email they answer from their inbox.`, step: STEP_APPROVE });
       }
@@ -9864,7 +9864,7 @@ ${unitBoardHtml()}
       return `
         <div class="head"><div>
           <h2>Approval — ${esc(myName())}</h2>
-          <p>The order list goes to the approver as an email. Their answer comes back over the API and lands on these lines.</p>
+          <p>The order list goes to the approver as an email. Once they approve it there, it will be reflected here.</p>
         </div></div>
         <div class="panel"><div class="empty">
           ${emptyArt('sack')}
@@ -9889,8 +9889,7 @@ ${unitBoardHtml()}
     return `
       <div class="head">
         <div>
-          <h2>Approval — ${esc(myName())}</h2>
-          <p>The approver works in their inbox, not in here. These lines go out as an email; their answer comes back over the API and lands on the same lines. Each approved line then gets its own Raise PR — rejected lines cannot be raised.</p>
+          <h2>Approval — ${esc(myName())} ${infoMark('The approver answers by email. Once they approve it there, it will be reflected here. Each approved line then gets its own Raise PR — rejected lines cannot be raised.')}</h2>
         </div>
       </div>
 
@@ -9907,7 +9906,7 @@ ${unitBoardHtml()}
       <div class="alertbar ${answered ? '' : 'warn'}">
         <span class="alert-i" aria-hidden="true">${answered ? '✓' : '⏳'}</span>
         <span>
-          <b>${esc(req.ref)}</b> sent to <b>${esc(req.to)}</b> on ${esc(dStamp(req.at))}
+          <b>${esc(req.ref)}</b> sent for approval on ${esc(dStamp(req.at))}
           · ${fmt(req.count)} line${req.count === 1 ? '' : 's'} · ${aedM(req.value)}.
           ${answered
             ? `Answered — ${fmt(app.length)} approved${rej.length ? `, ${fmt(rej.length)} rejected` : ''}.`
@@ -9991,7 +9990,7 @@ ${unitBoardHtml()}
             : !req
             ? `Nothing has gone out yet. The list is sent from the order list, where you can read it first — it goes to ${esc(approverFor(state.myUnit))} as an email they answer from their inbox.`
             : !answered
-            ? `Waiting on ${esc(req.to)}. Their answer arrives over the API and lands on these lines — no PR can be created until it does.`
+            ? `Waiting on ${esc(req.to)}. Once they approve it in the email it will be reflected here — no PR can be raised until then.`
             : `${fmt(app.length)} of ${fmt(orders.length)} approved · ${aedM(val(app))}${rej.length ? ` · ${fmt(rej.length)} rejected and not carried forward` : ''} · ${aedM(balVal)} still to raise`}</p>
         </div>
       </div>
@@ -11906,7 +11905,7 @@ ${unitBoardHtml()}
       logChange('cycle', `Sent for approval · ${state.approvalReq.ref}`, 'not sent',
         `with ${to}`, `${orders.length} lines · ${aedM(state.approvalReq.value)}`);
       showToast({ tone:'good', t:`Sent to ${to}`,
-        s:`${fmt(orders.length)} lines went out as ${state.approvalReq.ref}. They answer in the email; the reply lands back on these lines over the API.` }, 8000);
+        s:`${fmt(orders.length)} lines went out as ${state.approvalReq.ref}. Once they approve it in the email it will be reflected here.` }, 8000);
       state.maxStep = Math.max(state.maxStep, STEP_APPROVE);
       go(STEP_APPROVE);
     };

@@ -2445,6 +2445,14 @@
   td { padding: 12px 14px; border-top: 1px solid var(--line); vertical-align: top; font-size: var(--fs-sm); line-height: 1.5; }
   td select, td input { font-size: var(--fs-sm); }
   tbody tr:hover { background: var(--surface-2); }
+  /* Pinned leading columns on a table that scrolls sideways. A sticky cell
+     needs its own background or the scrolled cells show through it. */
+  .frz { position: sticky; z-index: 2; background: var(--surface); }
+  th.frz { z-index: 4; background: var(--surface-2); }
+  tbody tr:hover > .frz { background: var(--surface-2); }
+  .frz-last { box-shadow: inset -1px 0 0 var(--line), 8px 0 8px -8px rgb(0 0 0 / .18); }
+  .frz-bar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 6px 12px 2px; }
+  .frz-bar .muted { font-size: var(--fs-xs); }
   .r { text-align: right; }
   /* A rail down the left of each line, the same colours the cover column uses. */
   .req-r > td:first-child { border-left: 3px solid transparent; }
@@ -4397,6 +4405,9 @@
     runLog: [],               // one entry per completed run — see RUN_KEY
     runDrawer: null,    // which run's timeline is open in the drawer
     olOpen: null,       // which order list is expanded; null = the newest, '' = none
+    // Tables whose leading columns the planner has unpinned, by table name.
+    // Pinned is the default, so only an unfreeze is recorded.
+    unfrozen: {},
     fcOpen: null,       // which uploaded file is expanded on the versions page       // which order list in the log is expanded            // which run has its detail expanded
     // Which rail item you arrived by, when the screen belongs to more than one.
     // Cleared by any move through the cycle, so it only ever describes the trip
@@ -5285,6 +5296,7 @@
     m.classList.toggle('grid-page', state.step === PAGE_ITEMS || state.step === STEP_ITEMS);
     m.innerHTML = stepperHtml() + body;
     a11yTables(m);
+    freezeTables(m);
     wire();
     renderDrawer();
     renderStockDrawer();
@@ -9388,6 +9400,52 @@ ${unitBoardHtml()}
       }
     });
   }
+
+  // A table wider than its panel keeps its identifying columns — the checkbox
+  // and the material — pinned while the figures scroll, with a toggle to let
+  // them go. Only tables that actually overflow get either; the extract grid
+  // and item master have their own freeze control and are left alone.
+  function freezeTables(root) {
+    root.querySelectorAll('.scroll > table').forEach(t => {
+      if (t.matches('.mx, .imtable')) return;
+      const wrap = t.parentElement;
+      t.querySelectorAll('.frz').forEach(c => { c.classList.remove('frz', 'frz-last'); c.style.left = ''; });
+      let bar = wrap.previousElementSibling && wrap.previousElementSibling.classList.contains('frz-bar')
+        ? wrap.previousElementSibling : null;
+      if (wrap.scrollWidth <= wrap.clientWidth + 1) { if (bar) bar.remove(); return; }
+      const key = t.getAttribute('aria-label') || 'table';
+      const on = !state.unfrozen[key];
+      if (!bar) { bar = document.createElement('div'); bar.className = 'frz-bar'; wrap.before(bar); }
+      bar.innerHTML = `<span class="muted">${on ? 'First columns pinned — scroll sideways for the rest' : 'Scroll sideways for more columns'}</span>
+        <button class="btn btn-s btn-ghost" aria-pressed="${on}">${on ? 'Unfreeze columns' : 'Freeze columns'}</button>`;
+      bar.querySelector('button').onclick = () => {
+        if (on) state.unfrozen[key] = true; else delete state.unfrozen[key];
+        freezeTables(root);
+      };
+      if (!on) return;
+      const plain = r => ![...r.cells].some(c => c.colSpan > 1);
+      const head = t.tHead && t.tHead.rows[0];
+      const body = [...t.querySelectorAll('tbody tr')].find(plain);
+      if (!head || !body) return;
+      // Up to and including the material column, and never more than two.
+      const mat = [...body.cells].findIndex(c => c.querySelector('.cell-code'));
+      const n = Math.min(mat >= 0 ? mat + 1 : 1, 2);
+      const lefts = [];
+      for (let i = 0, x = 0; i < n; i++) { lefts.push(x); x += head.cells[i].getBoundingClientRect().width; }
+      [...t.rows].filter(plain).forEach(r => {
+        for (let i = 0; i < n && i < r.cells.length; i++) {
+          r.cells[i].classList.add('frz');
+          if (i === n - 1) r.cells[i].classList.add('frz-last');
+          r.cells[i].style.left = lefts[i] + 'px';
+        }
+      });
+    });
+  }
+  let frzTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(frzTimer);
+    frzTimer = setTimeout(() => { const m = $('#main'); if (m) { a11yTables(m); freezeTables(m); } }, 150);
+  });
 
   // The drawers draw their own tables outside #main, on their own schedule.
   ['#drawerHost', '#stockHost', '#reqHost'].forEach(sel => {

@@ -9750,9 +9750,7 @@ ${unitBoardHtml()}
   // order list, approval, order lists and PR status, and nowhere else.
   function viewNewPr() {
     const ids = state.newPr ? (state.newPr.ids || (state.newPr.id ? [state.newPr.id] : [])) : [];
-    const bs = ids.map(id => state.book.find(x => x.id === id)).filter(Boolean);
-    if (bs.length > 1) return viewNewPrMany(bs);
-    const b = bs[0];
+    const b = ids.map(id => state.book.find(x => x.id === id)).find(Boolean);
     if (!b) return `
       <div class="panel"><div class="empty">
         ${emptyArt('box')}
@@ -9841,51 +9839,6 @@ ${unitBoardHtml()}
           <button class="btn btn-s btn-ghost" id="npCancel">${bal > 0 ? 'Cancel' : 'Back'}</button>
         </div>
         <div class="step-sub"><p class="step-n">The PR goes to Dynamics against ${esc(b.supplier || 'the supplier')} and shows on PR status with the running total and the balance.</p></div>
-      </div>
-    `;
-  }
-
-  // The ticked lines, each asking for its own quantity. Nothing is raised
-  // until the planner presses the button, and each line becomes its own PR.
-  function viewNewPrMany(bs) {
-    return `
-      <div class="pagehead">
-        <div class="hello"><div>
-          <h1 class="greet">Raise PRs — ${fmt(bs.length)} selected lines</h1>
-          <p class="greet-s">One PR per line. Check each quantity — lower it to raise only part now, and the rest stays on the line for the next PR.</p>
-        </div></div>
-      </div>
-
-      <div class="panel">
-        <div class="scroll"><table>
-          <thead><tr>
-            <th>Material</th><th>Supplier</th><th class="r">Approved</th><th class="r">PR raised</th><th class="r">Balance</th>
-            <th class="r">Quantity on this PR</th><th class="r col-val">PR value</th><th class="r">Balance after</th>
-          </tr></thead>
-          <tbody>${bs.map(b => {
-            const bal = balanceOf(b);
-            const draft = state.coDraft[b.id] == null ? bal : state.coDraft[b.id];
-            return `<tr>
-              <td style="max-width:32ch"><div class="cell-code">${esc(b.code)}</div><div class="cell-desc">${esc(b.desc)}</div></td>
-              <td>${esc(b.supplier || 'Unassigned')}</td>
-              <td class="r num">${fmt(b.req)} <span class="muted">${esc(b.uom || '')}</span></td>
-              <td class="r num">${fmt(raisedFor(b.id))}</td>
-              <td class="r num">${fmt(bal)}</td>
-              <td class="r"><input type="number" data-npq="${esc(b.id)}" value="${draft}" min="1" max="${bal}" style="width:130px"
-                aria-label="Quantity to raise for ${esc(b.code)}"><div class="why" data-npw="${esc(b.id)}"></div></td>
-              <td class="r num col-val" data-npv="${esc(b.id)}"></td>
-              <td class="r num" data-npa="${esc(b.id)}"></td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table></div>
-      </div>
-
-      <div class="step-bar">
-        <div class="step-row">
-          <button class="btn btn-p btn-lg step-b" id="npGoMany">Raise ${fmt(bs.length)} PRs</button>
-          <button class="btn btn-s btn-ghost" id="npCancel">Cancel</button>
-        </div>
-        <div class="step-sub"><p class="step-n"><span id="npTotal"></span> · each PR shows on PR status with its running total and balance.</p></div>
       </div>
     `;
   }
@@ -10417,11 +10370,10 @@ ${unitBoardHtml()}
 
   // Nothing is raised on approval. The planner raises each PR by hand — from
   // a line's own Raise PR, or by ticking the lines they want and raising those.
-  function openCreatePr(id, back) { openCreatePrs([id], back); }
-  function openCreatePrs(ids, back) {
-    ids = ids.filter(id => { const b = state.book.find(x => x.id === id); return b && balanceOf(b) > 0; });
-    if (!ids.length) return;
-    state.newPr = { ids, back: back == null ? state.step : back };
+  function openCreatePr(id, back) {
+    const b = state.book.find(x => x.id === id);
+    if (!b || balanceOf(b) <= 0) return;
+    state.newPr = { ids: [id], back: back == null ? state.step : back };
     state.maxStep = Math.max(state.maxStep, PAGE_NEWPR);
     go(PAGE_NEWPR);
   }
@@ -12075,33 +12027,6 @@ ${unitBoardHtml()}
       };
     }
 
-    const npMany = $('#npGoMany');
-    if (npMany) {
-      const ins = [...document.querySelectorAll('[data-npq]')];
-      const bookOf = i => state.book.find(x => x.id === i.dataset.npq);
-      const paintAll = () => {
-        let total = 0, bad = false;
-        ins.forEach(i => {
-          const e = bookOf(i), bal = balanceOf(e), v = +i.value;
-          state.coDraft[e.id] = i.value === '' ? 0 : v;
-          const why = i.value === '' || !isFinite(v) ? 'Enter a quantity' : v <= 0 ? 'At least 1'
-            : !Number.isInteger(v) ? 'Whole number' : v > bal ? `Only ${fmt(bal)} left` : '';
-          bad = bad || !!why;
-          if (!why) total += v * e.price;
-          document.querySelector(`[data-npv="${CSS.escape(e.id)}"]`).innerHTML = why ? '—' : aed(v * e.price);
-          const a = document.querySelector(`[data-npa="${CSS.escape(e.id)}"]`);
-          a.textContent = why ? '—' : fmt(bal - v);
-          a.style.color = why ? '' : bal - v > 0 ? 'var(--flag)' : 'var(--good)';
-          document.querySelector(`[data-npw="${CSS.escape(e.id)}"]`).textContent = why;
-        });
-        $('#npTotal').innerHTML = `${aed(total)} across ${fmt(ins.length)} PRs`;
-        npMany.disabled = bad;
-      };
-      ins.forEach(i => { i.oninput = paintAll; });
-      paintAll();
-      npMany.onclick = () => createPrs(ins.map(i => ({ id: i.dataset.npq, qty: +i.value })));
-    }
-
     document.querySelectorAll('[data-prsel]').forEach(c => c.onchange = () => {
       const id = c.dataset.prsel;
       state.prSel = c.checked ? [...new Set([...state.prSel, id])] : state.prSel.filter(x => x !== id);
@@ -12112,9 +12037,14 @@ ${unitBoardHtml()}
       state.prSel = c.checked ? [...new Set([...state.prSel, ...ids])] : state.prSel.filter(x => !ids.includes(x));
       render();
     });
+    // The ticked lines are raised as they stand: one PR each, for the whole
+    // balance. Raising part of a line is what the line's own button is for.
     document.querySelectorAll('[data-prsel-go]').forEach(bt => bt.onclick = () => {
       const ids = bt.dataset.prselGo.split(',');
-      openCreatePrs(state.prSel.filter(id => ids.includes(id)));
+      const items = state.prSel.filter(id => ids.includes(id))
+        .map(id => state.book.find(x => x.id === id)).filter(b => b && balanceOf(b) > 0)
+        .map(b => ({ id: b.id, qty: balanceOf(b) }));
+      if (items.length) createPrs(items);
     });
 
     const npCancel = $('#npCancel');

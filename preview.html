@@ -1486,7 +1486,7 @@
   /* The mapping preview is reference, so it sets its type a step down and never
      competes with the controls above it. */
   .prevw table { font-size: var(--fs-xs); }
-  .prevw th { font-size: var(--fs-micro); }
+  .prevw th { font-size: var(--fs-label); }
   .prevw td { padding-top: 7px; padding-bottom: 7px; }
 
   /* Preview leads on width: the mapping table is four narrow columns, while the
@@ -1518,7 +1518,7 @@
   .mapwrap > .panel + .panel { margin-top: 0; }
   @media (max-width: 1050px) { .mapwrap { grid-template-columns: minmax(0, 1fr); } }
   .maptable { font-size: var(--fs-sm); }
-  .maptable td { padding-top: 6px; padding-bottom: 6px; }
+  .maptable td { padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
   /* Fits its panel exactly — no sideways scroll, which was clipping the STATUS
      heading to "STATU". Tighter gutters than the app's default table, because
      three narrow columns do not need 14px either side. */
@@ -1585,7 +1585,7 @@
      padding, and the two columns that can be long clipped with an ellipsis and
      their full value on hover. */
   .prevw table { font-size: var(--fs-xs); }
-  .prevw th { font-size: var(--fs-micro); white-space: nowrap; }
+  .prevw th { font-size: var(--fs-label); white-space: nowrap; }
   .prevw td { padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .prevtable { table-layout: fixed; width: 100%; }
   .prevtable th { padding-left: 8px; padding-right: 8px; }
@@ -2465,6 +2465,11 @@
   /* Inter like the rest of the table; tabular figures keep codes of the same
      length lining up, and the weight lets the code lead its description. */
   .cell-code { font-family: inherit; font-size: var(--fs-sm); font-weight: var(--w-med); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  /* The mapping and preview tables mark whole cells as data, not just codes.
+     There every cell reads at the size of the dropdowns beside them, with only
+     the FG code keeping the weight. */
+  .maptable td.cell-code, .prevw td.cell-code { font-size: var(--fs-xs); font-weight: var(--w-reg); }
+  .prevw td.cell-code.c-fg { font-weight: var(--w-med); }
   /* A code that goes somewhere. Underlined rather than coloured, so a column of
      them does not turn the table into a wall of links. */
   .fglink {
@@ -9409,7 +9414,7 @@ ${unitBoardHtml()}
   // and item master have their own freeze control and are left alone.
   function freezeTables(root) {
     root.querySelectorAll('.scroll > table').forEach(t => {
-      if (t.matches('.mx, .imtable')) return;
+      if (t.matches('.mx, .imtable, .maptable')) return;
       const wrap = t.parentElement;
       t.querySelectorAll('.frz').forEach(c => { c.classList.remove('frz', 'frz-last'); c.style.left = ''; });
       let bar = wrap.previousElementSibling && wrap.previousElementSibling.classList.contains('frz-bar')

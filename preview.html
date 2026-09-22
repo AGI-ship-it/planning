@@ -5341,8 +5341,11 @@
       getComputedStyle(host).getPropertyValue('--nav-w').trim() || '0px');
     host.innerHTML = `
       <button class="nav-toggle" id="navToggle" aria-label="${open ? 'Collapse the menu' : 'Expand the menu'}" aria-expanded="${open}">
-        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-          <path d="M3.5 6h13M3.5 10h13M3.5 14h13"/>
+        ${/* A panel with its rail marked, and an arrow saying which way the
+             click goes: in when the menu is open, out when it is shut. */ ''}
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2.75" y="3.5" width="14.5" height="13" rx="2.5"/><path d="M7.5 3.5v13"/>
+          <path d="${open ? 'M13.2 7.8 11 10l2.2 2.2' : 'M11 7.8 13.2 10 11 12.2'}"/>
         </svg>
       </button>
       ${/* Who you are and how the app looks, at the top where account controls

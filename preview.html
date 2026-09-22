@@ -1364,19 +1364,23 @@
      and keeps the only solid button on the card. */
   .sc-alt { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; align-self: center; }
   .sc-alt svg { width: 13px; height: 13px; flex: none; display: block; }
+  /* The card sits in the middle of the space under the stepper rather than
+     hugging the top of it. */
+  .sc-stage { min-height: calc(100vh - 230px); display: flex; flex-direction: column; justify-content: center; }
+  .sc-stage > div:empty { display: none; }
   /* Doubled class: .startcard and .startcard-solo come later and set flex and
      the narrower width. */
   .startcard.sc-split {
-    display: grid; grid-template-columns: minmax(250px, 4fr) minmax(0, 7fr); column-gap: 24px;
+    display: grid; grid-template-columns: minmax(260px, 4fr) minmax(0, 7fr); column-gap: 40px;
     max-width: 1040px;
   }
   .sc-split .pickzone {
-    margin: -14px 0 -14px -20px; padding-top: 14px; border-bottom: 0; border-right: 1px solid var(--line);
+    margin: -36px 0 -36px -40px; padding: 36px 40px; border-bottom: 0; border-right: 1px solid var(--line);
     border-radius: var(--r-xl) 0 0 var(--r-xl);
   }
   /* In a column the units read as a list: one per line, name left, code right. */
   .sc-split .plantpick { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
-  .sc-split .pp .pp-c { margin-left: auto; }
+  .pp .pp-c { margin-left: -4px; }
   .sc-up { display: flex; flex-direction: column; min-width: 0; }
   /* A picked unit settles in rather than snapping: the fill eases, the tick
      pops. On first arrival the card rises and the units follow one by one. */
@@ -1398,14 +1402,14 @@
      columns start and end together. Three classes: .startcard .drop comes
      later and sets its own minimum. */
   .startcard .sc-up .drop { flex: 1; min-height: 220px; }
+  .startcard-solo .sc-up .sc-h { margin-bottom: 12px; }
   @media (max-width: 860px) {
     .startcard.sc-split { grid-template-columns: minmax(0, 1fr); }
     .sc-split .pickzone {
-      margin: -14px -20px 14px; border-right: 0; border-bottom: 1px solid var(--line);
+      margin: -36px -40px 28px; border-right: 0; border-bottom: 1px solid var(--line);
       border-radius: var(--r-xl) var(--r-xl) 0 0;
     }
     .sc-split .plantpick { flex-direction: row; flex-wrap: wrap; align-items: center; }
-    .sc-split .pp .pp-c { margin-left: 0; }
   }
   .startcard-solo .drop { border-radius: var(--r-xl); background-color: var(--group); }
   .startcard-solo .drop-h { font-size: var(--fs-md); }
@@ -1430,8 +1434,8 @@
   /* Below .startcard, or the base rule wins on padding and the bled header
      inside it lands 4px short of the card's edges. */
   .startcard-solo {
-    width: 100%; max-width: 860px; margin: 24px auto 0;
-    padding: 14px 20px 14px; border-radius: var(--r-xl);
+    width: 100%; max-width: 860px; margin: 0 auto;
+    padding: 36px 40px; border-radius: var(--r-xl);
   }
   .sc-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .sc-t {
@@ -1458,8 +1462,16 @@
     background: none; border: 0; padding: 2px 0; color: var(--ink);
   }
   .sc-link svg { width: 13px; height: 13px; }
-  .sc-f .tip-trigger { font-size: var(--fs-label); font-weight: var(--w-semi); color: var(--ink); padding: 2px 0; }
-  .sc-f .tip-trigger:hover { color: var(--accent); background: none; }
+  .sc-f .tip-trigger { font-size: var(--fs-label); font-weight: var(--w-semi); padding: 2px 0; }
+  /* The two footer actions read as links, the same way codes that go
+     somewhere do: dotted until you are on them, solid and brighter when you are. */
+  .sc-f .sc-link {
+    color: var(--accent); text-decoration: underline; text-decoration-style: dotted;
+    text-decoration-thickness: 1px; text-underline-offset: 3px;
+    transition: color .12s ease;
+  }
+  .sc-f .sc-link:hover, .sc-f .sc-link:focus-visible { color: var(--hi); text-decoration-style: solid; background: none; }
+  .sc-f .sc-link:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; border-radius: var(--r-sm); }
   .sc-link:hover { color: var(--accent); }
   .sc-link-a { color: var(--hi); }
   .sc-link-a:hover { color: var(--hi); text-decoration: underline; text-underline-offset: 3px; }
@@ -1972,23 +1984,26 @@
      --group resolves to exactly the sidebar colour in both themes, so a track
      painted with it disappeared and left three loose icons with one of them in
      a floating capsule. */
+  /* A small segmented control sized to its icons, the way Claude's is: quiet
+     grey track, the chosen one lifted onto the surface in ink rather than
+     brand colour. */
   .themeseg {
-    display: flex; gap: 2px; flex: none;
+    display: inline-flex; gap: 2px; flex: none; align-self: flex-start;
     margin: 14px 0 0; padding: 3px;
-    background: var(--ground); border: 1px solid var(--line);
-    border-radius: var(--r-pill);
+    background: var(--surface-2); border: 0;
+    border-radius: var(--r-lg);
   }
   .themeseg-i {
-    flex: 1; display: grid; place-items: center; height: 29px;
-    border: 0; border-radius: var(--r-pill); background: none;
+    display: grid; place-items: center; width: 34px; height: 30px; padding: 0;
+    border: 0; border-radius: var(--r-md); background: none;
     color: var(--muted); cursor: pointer;
-    transition: background .14s ease, color .14s ease;
+    transition: background .14s ease, color .14s ease, box-shadow .14s ease;
   }
-  .themeseg-i svg { width: 16px; height: 16px; }
+  .themeseg-i svg { width: 19px; height: 19px; }
   .themeseg-i:hover { color: var(--ink); }
   .themeseg-i.on {
-    background: var(--surface); color: var(--hi);
-    box-shadow: 0 1px 2px rgba(29, 18, 38, .09);
+    background: var(--surface); color: var(--ink);
+    box-shadow: 0 1px 2px rgba(29, 18, 38, .12), 0 0 0 .5px rgba(29, 18, 38, .06);
   }
   /* Collapsed, the three stack. A single button that cycles would fit in one
      row, but it could not show which state is on without being pressed. */
@@ -2518,7 +2533,7 @@
   .frz-bar .btn { padding-right: 2px; }
   .frz-bar-in .btn { padding-left: 8px; }
   .frz-bar-in .tip-b { width: 18px; height: 18px; }
-  .frz-bar-in .tip-b svg { width: 14px; height: 14px; }
+  .frz-bar-in .tip-b svg { width: 16px; height: 16px; }
   .imbar .imbar-csv { padding-left: 8px; padding-right: 8px; }
   .frz-tip { margin-left: 0; }
   /* The bar sits at the right edge, so the bubble opens leftward. */
@@ -3007,12 +3022,13 @@
     width: 21px; height: 21px; padding: 0; border: 0; border-radius: 50%;
     background: none; color: var(--accent); cursor: help; display: grid; place-items: center;
   }
-  .tip-b:hover { color: var(--accent); background: var(--surface-2); }
-  .tip-b svg { width: 16px; height: 16px; }
+  .tip-b:hover { color: var(--accent); }
+  .tip-b svg { width: 18px; height: 18px; }
   /* Filled: a purple disc with the i knocked out of it. */
-  .tip-b svg > circle:first-child { fill: currentColor; }
-  .tip-b svg > path { stroke: var(--on-accent); stroke-width: 2; }
-  .tip-b svg > circle:last-child { fill: var(--on-accent); r: .9; }
+  .tip-b svg > path { stroke: var(--on-accent); }
+  .tip-b svg > circle:last-child { fill: var(--on-accent); }
+  .tip-b { transition: box-shadow .15s ease, transform .15s ease; }
+  .tip-b:hover, .tip:focus-within .tip-b { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
   .tip-c {
     position: absolute; top: calc(100% + 9px); left: 50%; transform: translateX(-50%);
     width: max-content; max-width: 240px; text-align: left;
@@ -3027,8 +3043,8 @@
   .tip:hover .tip-c, .tip:focus-within .tip-c { opacity: 1; }
   /* Card-sized mark: smaller, and quiet until the card is under the pointer. */
   .tip-sm { margin-left: 5px; }
-  .tip-sm .tip-b { width: 16px; height: 16px; color: var(--accent); }
-  .tip-sm .tip-b svg { width: 13px; height: 13px; }
+  .tip-sm .tip-b { width: 17px; height: 17px; color: var(--accent); }
+  .tip-sm .tip-b svg { width: 15px; height: 15px; }
   .tip-sm:hover .tip-b { color: var(--accent); background: none; }
   @media (prefers-reduced-motion: reduce) { .tip-c { transition: none; } }
 
@@ -4708,15 +4724,15 @@
   // just the absence of a choice. A two-way toggle would strand anyone whose
   // machine switches at sunset.
   const THEMES = [
+    { k:'system', t:'System' },
     { k:'light',  t:'Light' },
-    { k:'dark',   t:'Dark' },
-    { k:'system', t:'System' }
+    { k:'dark',   t:'Dark' }
   ];
   const THEME_KEY = 'mrp.theme';
   const THEME_ICON = {
-    light: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2M12 19.4v2M21.4 12h-2M4.6 12h-2M18.6 5.4 17.2 6.8M6.8 17.2l-1.4 1.4M18.6 18.6l-1.4-1.4M6.8 6.8 5.4 5.4"/></svg>',
-    dark:  '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 14.2A8.6 8.6 0 0 1 9.8 3.6a8.6 8.6 0 1 0 10.6 10.6Z"/></svg>',
-    system:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="4" width="18.4" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/></svg>'
+    light: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.6"/><path d="M12 2.6v2M12 19.4v2M21.4 12h-2M4.6 12h-2M18.6 5.4 17.2 6.8M6.8 17.2l-1.4 1.4M18.6 18.6l-1.4-1.4M6.8 6.8 5.4 5.4"/></svg>',
+    dark:  '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 14.2A8.6 8.6 0 0 1 9.8 3.6a8.6 8.6 0 1 0 10.6 10.6Z"/></svg>',
+    system:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg>'
   };
 
   function applyTheme(k) {
@@ -4924,8 +4940,8 @@
 
   const infoMark = text => `<span class="tip tip-sm">
     <span class="tip-b" aria-hidden="true">
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="10" cy="10" r="7.6"/><path d="M10 9.2v4.4"/><circle cx="10" cy="6.5" r=".55" fill="currentColor" stroke="none"/>
+      <svg aria-hidden="true" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="9.5" fill="currentColor"/><path d="M10 9.1v5.1" fill="none" stroke-width="2.5" stroke-linecap="round"/><circle cx="10" cy="5.8" r="1.45"/>
       </svg>
     </span>
     <span class="tip-c" role="tooltip">${esc(text)}</span>
@@ -4933,8 +4949,8 @@
 
   const infoTip = text => `<span class="tip">
     <button class="tip-b" aria-label="More about this" aria-describedby="">
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="10" cy="10" r="7.6"/><path d="M10 9.2v4.4"/><circle cx="10" cy="6.5" r=".55" fill="currentColor" stroke="none"/>
+      <svg aria-hidden="true" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="9.5" fill="currentColor"/><path d="M10 9.1v5.1" fill="none" stroke-width="2.5" stroke-linecap="round"/><circle cx="10" cy="5.8" r="1.45"/>
       </svg>
     </button>
     <span class="tip-c" role="tooltip">${esc(text)}</span>
@@ -7413,6 +7429,7 @@ ${unitBoardHtml()}
       // happens: which business unit, then its file. They stack on a narrow
       // screen.
       return `
+        <div class="sc-stage">
         <section class="startcard startcard-solo sc-split${nsc ? '' : ' is-locked'}${intro ? ' sc-intro' : ''}">
           <div class="pickzone">
             <div class="sc-h">
@@ -7431,7 +7448,7 @@ ${unitBoardHtml()}
                   role="radio" aria-checked="${on}" title="${c === state.myUnit ? 'The business unit you are working in' : esc(unitName(c))}">
                   <span class="pp-box" aria-hidden="true">${on ? TICK : ''}</span>
                   <span class="pp-n">${esc(unitName(c))}</span>
-                  <span class="pp-c">${esc(c)}</span>
+                  <span class="pp-c">(${esc(c)})</span>
                 </button>`;
               }).join('')}
             </div>
@@ -7510,7 +7527,8 @@ ${unitBoardHtml()}
           </div>
         </section>
 
-        <div style="margin-top:22px">${forecastHistoryHtml({ linkToStep:false })}</div>`;
+        <div style="margin-top:22px">${forecastHistoryHtml({ linkToStep:false })}</div>
+        </div>`;
     }
 
     const map = state.map || {};
@@ -9837,12 +9855,13 @@ ${unitBoardHtml()}
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
+          ${/* Opening the next plan is a deliberate act, offered only once the
+               approver has answered. Balances still to raise come across. Once
+               it is on offer it is the thing to do, so it leads, filled. */ ''}
+          ${cycleState().k === 'closed' ? `<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>` : ''}
           ${bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-s btn-ghost" id="exportCsv">Export CSV</button>
           <button class="btn btn-s btn-ghost" data-step="0">Back to dashboard</button>
-          ${/* Opening the next plan is a deliberate act, offered only once the
-               approver has answered. Balances still to raise come across. */ ''}
-          ${cycleState().k === 'closed' ? `<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>` : ''}
         </div>
         <div class="step-sub">
           <p class="step-n">${state.simulate
@@ -10224,9 +10243,9 @@ ${unitBoardHtml()}
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
+          ${cycleState().k === 'closed' ? '<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>' : ''}
           ${answered && bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-o btn-lg" data-step="0">Back to dashboard</button>
-          ${cycleState().k === 'closed' ? '<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>' : ''}
         </div>
         <div class="step-sub">
           <p class="step-n">${state.simulate
@@ -10661,10 +10680,14 @@ ${unitBoardHtml()}
   }
 
   // Raising is a requisition going to Dynamics, so it gets the same wait and
-  // the same confirmation wherever it starts. It lands on PR status, which is
-  // where the review said a raised PR should be seen.
+  // the same confirmation wherever it starts. It returns to the page the PR was
+  // raised from — a planner working down a list of lines keeps their place —
+  // and the toast links through to PR status.
   function createPrs(items) {
     const n = items.length;
+    const from = state.newPr ? state.newPr.back : state.step;
+    const back = from === PAGE_NEWPR ? PAGE_CALLOFFS : from;
+    const link = back === PAGE_CALLOFFS ? null : 'See in PR status';
     state.fcLoading = { t0: Date.now(), total: 1100,
       msg: n === 1 ? 'Raising the requisition in Dynamics 365' : `Raising ${fmt(n)} requisitions in Dynamics 365` };
     render();
@@ -10686,17 +10709,17 @@ ${unitBoardHtml()}
           : `${esc(first.b.code)} is now fully raised.`,
         label: left ? `Raise a PR for the remaining ${fmt(left)}` : null,
         open: left ? first.b.id : null,
-        step: PAGE_CALLOFFS
+        step: back, link
       } : {
         tone: stillOpen ? 'flag' : 'good',
         t: `${fmt(made.length)} PRs raised`,
         s: `${esc(made.map(m => m.ref).join(', '))} — one per line.${stillOpen ? ` ${fmt(stillOpen)} still ${stillOpen === 1 ? 'has' : 'have'} a balance to raise.` : ''}`,
-        step: PAGE_CALLOFFS
+        step: back, link
       }, 11000);
       state.newPr = null;
       state.poOpen = made.length === 1 ? first.ref : null;
       state.maxStep = Math.max(state.maxStep, PAGE_CALLOFFS);
-      go(PAGE_CALLOFFS);
+      go(back);
     }, 1100);
   }
 

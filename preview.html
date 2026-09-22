@@ -195,6 +195,7 @@
     --w-med: 500;
     --w-semi: 600;
     --w-bold: 700;
+    --w-heavy: 800;
 
     /* Spacing is declared but NOT retrofitted: padding in this file is
        still per component. New work uses these; the existing screens are a
@@ -369,6 +370,8 @@
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
   }
+  /* Titles wear the brand purple; body copy stays ink. */
+  h1, h2, h3, h4, .sec-t { color: var(--accent); }
 
   table, .tnum, .num { font-variant-numeric: tabular-nums; }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -454,16 +457,15 @@
      whether anything is wrong. These are tighter variants of the shared
      components rather than new ones, so the rest of the app is untouched. */
   .head-tight { margin-bottom: 12px; }
-  /* Title and the file it is about on one line — the file block was a card of
-     its own for two facts that fit beside the heading.
+  /* The file it is about sits on the line under the title.
      Doubled class on purpose: `.filerow` is defined further down the sheet, so
      a single `.filerow-1` loses the tie on source order and the block keeps the
      centred 620px width it has everywhere else. */
-  .fcbar { align-items: center; gap: 16px; flex-wrap: wrap; }
+  .head.fcbar { flex-direction: column; align-items: flex-start; gap: 4px; }
   .fcbar h2 { flex: none; margin: 0; }
   .filerow.filerow-1 {
     margin: 0; flex: 0 1 auto; width: auto; max-width: 100%;
-    padding: 6px 8px 6px 12px; gap: 10px;
+    padding: 2px 0; gap: 10px; border: 0; background: none;
   }
   .filerow.filerow-1 .filerow-n { flex: 0 1 auto; min-width: 0; }
   .filerow.filerow-1 .filerow-s { flex: none; white-space: nowrap; }
@@ -1139,15 +1141,18 @@
   table.mx, table.imtable { border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); }
   table.mx { table-layout: fixed; }
   table.mx th, table.mx td, table.imtable th, table.imtable td {
-    padding: 5px 9px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+    padding: 7px 9px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--surface);
   }
   table.mx thead th, table.imtable thead th {
     position: sticky; top: 0; z-index: 3;
-    background: var(--group); border-bottom: 1px solid var(--line-strong);
-    font-size: var(--fs-label); font-weight: var(--w-bold); letter-spacing: .04em; text-transform: uppercase;
-    color: var(--muted); padding: 0; vertical-align: bottom;
+    background: var(--surface-2); border-bottom: 1px solid var(--line-strong);
+    font-size: var(--fs-label); font-weight: var(--w-heavy); letter-spacing: .04em; text-transform: uppercase;
+    color: var(--accent); padding: 0; vertical-align: middle;
   }
+  /* A header with no sort button carries the button's padding itself, or its
+     label runs into the next one and sits lower than its sortable neighbours. */
+  table.imtable thead th:not(.imh) { padding: 8px 9px; }
   table.mx thead th.on, table.imtable thead th.on { color: var(--accent); }
   .mx-h {
     font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit;
@@ -1233,6 +1238,7 @@
   /* Description is the one column allowed to wrap — a row whose whole point is
      naming the thing reads badly clipped to an ellipsis. */
   .imtable .c-desc { min-width: 230px; white-space: normal; }
+  .imtable thead th.c-desc { white-space: nowrap; }
   .imtable .cell-desc { white-space: normal; }
   .imh { padding: 0; }
   /* Same button as .mx-h, same padding, so a header reads identically whichever
@@ -1247,7 +1253,13 @@
   .imh-b:hover { color: var(--accent); }
   .imh.on .imh-b { color: var(--accent); }
   .imh-a { font-size: var(--fs-micro); line-height: 1; }
-  .imtable .cell-in { min-width: 62px; }
+  .imtable .cell-in { width: 84px; appearance: textfield; -moz-appearance: textfield; }
+  .imtable .cell-in::-webkit-inner-spin-button, .imtable .cell-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  /* Pinned columns: above the scrolling header cells, and never see-through —
+     a dimmed out-of-scope row dims what is inside the cell, not the cell. */
+  table.imtable thead th.frz { z-index: 5; }
+  .imtable tr.im-out td.frz { opacity: 1; color: var(--faint); }
+  .imtable tr.im-out td.frz > * { opacity: .62; }
   /* The grid sets 11.5px on the table; a control inside a cell has to be told,
      or the generic 12px rule sets the row height on its own. */
   .imtable td select, .imtable td input { font-size: var(--fs-xs); }
@@ -1256,7 +1268,7 @@
 
   /* Cells you can type in. Borderless until touched, so a grid of inputs does
      not read as a wall of boxes. */
-  .gridtable td { padding-top: 4px; padding-bottom: 4px; }
+  .gridtable td { padding-top: 7px; padding-bottom: 7px; }
   /* A month header you can change. Reads as the heading it replaced until you
      go near it, because most of the time it is only a heading. */
   .mhead {
@@ -1293,7 +1305,7 @@
   /* Step one lives at the top of the same box as step two, on its own ground,
      bleeding out to the card's edges. */
   .pickzone {
-    margin: -14px -16px 14px; padding: 16px 20px 18px;
+    margin: -14px -20px 14px; padding: 16px 20px 18px;
     background: var(--group); border-bottom: 1px solid var(--line);
     border-radius: var(--r-xl) var(--r-xl) 0 0;
   }
@@ -1309,11 +1321,9 @@
      tried and gave a short name the same box as a long one, which read as a
      table of half-empty cells rather than a set of choices. */
   .pickzone .plantpick { justify-content: flex-start; margin: 0; }
-  /* Step one is the same block as step two — same badge, same left edge, same
-     rule beneath — so the numbers actually read as a sequence. */
-  .pickzone .sc-p-pick { margin: 6px 0 12px; padding-bottom: 0; border-bottom: 0; }
-  .sc-step-done { background: var(--accent); }
-  .sc-step-done svg { width: 12px; height: 12px; }
+  /* Step one is the same block as step two — same left edge, same rule
+     beneath — so the two read as a sequence. */
+  .pickzone .sc-h { justify-content: flex-start; }
   .plantpick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 20px; }
   /* A checkbox in a pill. Selected fills solid so a picked plant is legible
      across the room; unselected keeps a hairline so the row still reads as a
@@ -1345,33 +1355,70 @@
   .pp:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
 
   /* The header block is its own band, ruled off from the drop zone under it. */
-  .startcard-solo .sc-h { gap: 10px; }
+  /* What each step means lives in the info mark beside its heading. */
+  .startcard-solo .sc-h { gap: 10px; margin-bottom: 22px; }
+  .startcard-solo .sc-t .tip { margin-left: -2px; }
   .startcard-solo .sc-t { font-size: var(--fs-lg); }
-  .sc-step {
-    width: 22px; height: 22px; flex: none; border-radius: 50%;
-    display: grid; place-items: center;
-    background: var(--cta); color: var(--on-cta);
-    font-size: var(--fs-xs); font-weight: var(--w-bold);
-  }
   .sc-h-gap { flex: 1; min-width: 0; }
   /* An outline button, not the filled one: importing is still the common path
      and keeps the only solid button on the card. */
-  .sc-alt { gap: 5px; white-space: nowrap; align-self: center; }
-  .sc-alt svg { width: 13px; height: 13px; }
-  .startcard-solo .sc-p {
-    margin: 6px 0 16px; padding-bottom: 16px; padding-left: 32px;
-    border-bottom: 1px solid var(--line);
+  .sc-alt { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; align-self: center; }
+  .sc-alt svg { width: 13px; height: 13px; flex: none; display: block; }
+  /* Doubled class: .startcard and .startcard-solo come later and set flex and
+     the narrower width. */
+  .startcard.sc-split {
+    display: grid; grid-template-columns: minmax(250px, 4fr) minmax(0, 7fr); column-gap: 24px;
+    max-width: 1040px;
   }
-  .startcard-solo .drop { min-height: 240px; border-radius: var(--r-xl); background-color: var(--group); }
+  .sc-split .pickzone {
+    margin: -14px 0 -14px -20px; padding-top: 14px; border-bottom: 0; border-right: 1px solid var(--line);
+    border-radius: var(--r-xl) 0 0 var(--r-xl);
+  }
+  /* In a column the units read as a list: one per line, name left, code right. */
+  .sc-split .plantpick { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+  .sc-split .pp .pp-c { margin-left: auto; }
+  .sc-up { display: flex; flex-direction: column; min-width: 0; }
+  /* A picked unit settles in rather than snapping: the fill eases, the tick
+     pops. On first arrival the card rises and the units follow one by one. */
+  .sc-split .pp { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .12s ease; }
+  .sc-split .pp:active { transform: scale(.985); }
+  .sc-split .pp.on .pp-box svg { animation: pp-tick .28s cubic-bezier(.3, 1.6, .5, 1) both; }
+  @keyframes pp-tick { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sc-intro { animation: sc-rise .38s cubic-bezier(.2, .8, .2, 1) both; }
+  .sc-intro .pp { animation: sc-rise .32s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(80ms + var(--i, 0) * 45ms); }
+  .sc-intro .sc-up { animation: sc-fade .4s ease both; animation-delay: .12s; }
+  @keyframes sc-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes sc-fade { from { opacity: 0; } to { opacity: 1; } }
+  .sc-split .drop { transition: border-color .15s ease, background-color .15s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .sc-intro, .sc-intro .pp, .sc-intro .sc-up, .sc-split .pp.on .pp-box svg { animation: none; }
+    .sc-split .pp, .sc-split .drop { transition: none; }
+  }
+  /* The box takes whatever height the unit list gives the card, so the two
+     columns start and end together. Three classes: .startcard .drop comes
+     later and sets its own minimum. */
+  .startcard .sc-up .drop { flex: 1; min-height: 220px; }
+  @media (max-width: 860px) {
+    .startcard.sc-split { grid-template-columns: minmax(0, 1fr); }
+    .sc-split .pickzone {
+      margin: -14px -20px 14px; border-right: 0; border-bottom: 1px solid var(--line);
+      border-radius: var(--r-xl) var(--r-xl) 0 0;
+    }
+    .sc-split .plantpick { flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .sc-split .pp .pp-c { margin-left: 0; }
+  }
+  .startcard-solo .drop { border-radius: var(--r-xl); background-color: var(--group); }
   .startcard-solo .drop-h { font-size: var(--fs-md); }
   .startcard-solo .drop-btn { margin-top: 4px; padding: 9px 20px; font-size: var(--fs-base); }
-  .startcard-solo .sc-f { justify-content: center; gap: 12px; margin-top: 12px; padding-top: 0; border: 0; }
+  .startcard-solo .sc-f { justify-content: center; gap: 12px; margin-top: 18px; padding-top: 0; border: 0; }
   .startcard-solo .sc-f-sep { width: 1px; height: 11px; background: var(--line); }
   /* Shut until a plant is chosen. Dimmed rather than hidden, so the shape of
      what comes next is visible while it is still out of reach. */
-  .is-locked .drop { opacity: .5; }
+  /* The sample and the file spec sit in the box but stay usable while it is
+     shut, so only the rest of the box dims. */
+  .is-locked .drop > :not(.sc-f) { opacity: .5; }
+  .is-locked .drop { border-color: var(--line); }
   .is-locked .drop-art-sheet { animation: none; }
-  .is-locked .sc-f { opacity: .5; pointer-events: none; }
   .sc-f-gap { flex: 1; min-width: 0; }
   .sc-f-alt { color: var(--muted); }
   .startcard {
@@ -1383,8 +1430,8 @@
   /* Below .startcard, or the base rule wins on padding and the bled header
      inside it lands 4px short of the card's edges. */
   .startcard-solo {
-    width: 100%; max-width: 860px; margin: 0 auto;
-    padding: 14px 16px 11px; border-radius: var(--r-xl);
+    width: 100%; max-width: 860px; margin: 24px auto 0;
+    padding: 14px 20px 14px; border-radius: var(--r-xl);
   }
   .sc-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .sc-t {
@@ -1400,7 +1447,6 @@
   .sc-btn:hover { color: var(--ink); border-color: var(--line-strong); }
   .sc-btn svg { width: 13px; height: 13px; }
   .sc-tip .tip-c { left: auto; right: 0; transform: none; }
-  .sc-p { margin: 8px 0 12px; font-size: var(--fs-xs); line-height: 1.5; color: var(--muted); text-wrap: pretty; }
   .sc-f {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line);
@@ -1412,6 +1458,8 @@
     background: none; border: 0; padding: 2px 0; color: var(--ink);
   }
   .sc-link svg { width: 13px; height: 13px; }
+  .sc-f .tip-trigger { font-size: var(--fs-label); font-weight: var(--w-semi); color: var(--ink); padding: 2px 0; }
+  .sc-f .tip-trigger:hover { color: var(--accent); background: none; }
   .sc-link:hover { color: var(--accent); }
   .sc-link-a { color: var(--hi); }
   .sc-link-a:hover { color: var(--hi); text-decoration: underline; text-underline-offset: 3px; }
@@ -2113,6 +2161,22 @@
   main { padding: 44px 44px 190px; max-width: none; width: 100%; margin: 0; }
   @media (max-width: 720px) { main { padding-left: 20px; padding-right: 20px; } }
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 22px; }
+  /* A page-level refresh: round, pink, top right of the head. It spins while
+     it checks. */
+  .refresh-b {
+    flex: none; width: 38px; height: 38px; display: grid; place-items: center;
+    border: 0; border-radius: 50%; background: var(--hi-soft); color: var(--hi); cursor: pointer;
+    transition: background-color .15s ease;
+  }
+  .refresh-b:hover { background: color-mix(in srgb, var(--hi) 18%, var(--surface)); }
+  .refresh-b:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+  .refresh-b svg { width: 18px; height: 18px; }
+  .refresh-b.is-busy { cursor: progress; }
+  /* Once the reply is in, the same disc holds a tick and stops being a button. */
+  .refresh-b.is-done { cursor: default; }
+  .refresh-b.is-done svg { animation: pp-tick .3s cubic-bezier(.3, 1.6, .5, 1) both; }
+  .refresh-b.is-busy svg { animation: spin .8s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .refresh-b.is-busy svg { animation: none; opacity: .5; } .refresh-b.is-done svg { animation: none; } }
   .head h2 { margin: 0; font-size: var(--fs-lg); font-weight: var(--w-semi); letter-spacing: -.015em; text-wrap: balance; }
   .head p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
   .head .ap-status { max-width: none; color: var(--ink); }
@@ -2227,9 +2291,6 @@
   /* Tag is the coarsest cut through the planning table — whether a line is
      planned at all — so it sits on its own row above the table rather than
      inside the filter bar with the field-by-field ones. */
-  .tagfilter { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
-  .tagfilter-l { font-size: var(--fs-label); color: var(--muted); margin-right: 4px; }
-  .tagfilter .chip:disabled { opacity: .4; cursor: not-allowed; }
 
 
   /* One column. The checklist was a sidebar competing with the settings for
@@ -2438,7 +2499,7 @@
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-weight: var(--w-semi); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--surface-2); padding: 10px 14px; white-space: nowrap; position: sticky; top: 0; }
+  th { text-align: left; font-weight: var(--w-heavy); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: .07em; color: var(--accent); background: var(--surface-2); padding: 10px 14px; white-space: nowrap; position: sticky; top: 0; }
   /* Tables run to a dozen columns, so they set their own type scale a step
      below the body rather than inheriting it — the controls inside the cells
      come with it, or a 13px select would set the row height on its own. */
@@ -2452,7 +2513,36 @@
   tbody tr:hover > .frz { background: var(--surface-2); }
   .frz-last { box-shadow: inset -1px 0 0 var(--line), 8px 0 8px -8px rgb(0 0 0 / .18); }
   .frz-bar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 6px 12px 2px; }
-  .frz-bar .muted { font-size: var(--fs-xs); }
+  .frz-bar { gap: 2px; }
+  .frz-bar-in { display: inline-flex; padding: 0; gap: 0; }
+  .frz-bar .btn { padding-right: 2px; }
+  .frz-bar-in .btn { padding-left: 8px; }
+  .frz-bar-in .tip-b { width: 18px; height: 18px; }
+  .frz-bar-in .tip-b svg { width: 14px; height: 14px; }
+  .imbar .imbar-csv { padding-left: 8px; padding-right: 8px; }
+  .frz-tip { margin-left: 0; }
+  /* The bar sits at the right edge, so the bubble opens leftward. */
+  .frz-tip .tip-c { left: auto; right: 0; transform: none; }
+  /* The pin shows on a heading you are near and stays on the pinned ones. It
+     sits in the cell's padding on the side the label is not. */
+  .frz-pin {
+    position: absolute; top: 50%; right: 3px; transform: translateY(-50%);
+    display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
+    border: 0; border-radius: var(--r-sm); background: var(--surface-2); color: var(--faint);
+    cursor: pointer; opacity: 0; transition: opacity .1s;
+  }
+  th.r > .frz-pin { right: auto; left: 3px; }
+  th.has-pin:not(.imh) { padding-right: 24px; }
+  th.has-pin.r:not(.imh) { padding-right: 14px; padding-left: 24px; }
+  table.imtable thead th.has-pin:not(.imh) { padding-right: 24px; }
+  table.imtable thead th.has-pin.r:not(.imh) { padding-right: 9px; padding-left: 24px; }
+  .imh.has-pin .imh-b { padding-right: 24px; }
+  .imh.has-pin.r .imh-b { padding-right: 9px; padding-left: 24px; }
+  .frz-pin svg { width: 12px; height: 12px; }
+  th:hover > .frz-pin, .frz-pin:focus-visible { opacity: 1; }
+  .frz-pin.on { opacity: 1; color: var(--accent); }
+  .frz-pin:hover { color: var(--accent); background: var(--accent-soft); }
+  .frz-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .r { text-align: right; }
   /* A rail down the left of each line, the same colours the cover column uses. */
   .req-r > td:first-child { border-left: 3px solid transparent; }
@@ -2523,7 +2613,6 @@
   .btn-o {
     background: var(--surface); border-color: var(--cta); color: var(--cta); font-weight: var(--w-semi);
   }
-  .btn-o:hover:not(:disabled) { background: var(--cta); border-color: var(--cta); color: var(--on-cta); }
   /* Throwing the file away is not the same act as importing it, so it does not
      wear the same button. */
   .btn-danger {
@@ -2542,7 +2631,7 @@
      rather than under it. Carries the brand colour without the fill, so it
      reads as a real choice but never competes with Generate. */
 
-  .btn-o:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+  .btn-o:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--cta); color: var(--cta); }
   /* Every button on an action row is the same size, whatever its weight. The
      hierarchy is carried by fill and colour — a secondary action that is also
      physically smaller reads as an afterthought rather than a choice. */
@@ -2878,6 +2967,14 @@
   .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 
   select, input[type="number"] { font: inherit; padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface); color: var(--ink); font-variant-numeric: tabular-nums; }
+  /* Our own chevron rather than the browser's, which sat hard against the
+     pill's curve. The grid's in-cell pickers and the month headings keep the
+     native one: they are styled to disappear into the table. */
+  select:not(.mhead):not(.gridin) {
+    appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%238b8b95' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.6 6 7.6l3-3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; background-size: 12px;
+  }
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .rowflex { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -2905,13 +3002,17 @@
   /* Explanatory copy that a returning planner does not need every visit, parked
      behind a mark next to the heading. Hover or keyboard focus opens it — hover
      alone would put it out of reach of anyone tabbing through. */
-  .tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 7px; }
+  .tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 3px; }
   .tip-b {
     width: 21px; height: 21px; padding: 0; border: 0; border-radius: 50%;
-    background: none; color: var(--faint); cursor: help; display: grid; place-items: center;
+    background: none; color: var(--accent); cursor: help; display: grid; place-items: center;
   }
   .tip-b:hover { color: var(--accent); background: var(--surface-2); }
   .tip-b svg { width: 16px; height: 16px; }
+  /* Filled: a purple disc with the i knocked out of it. */
+  .tip-b svg > circle:first-child { fill: currentColor; }
+  .tip-b svg > path { stroke: var(--on-accent); stroke-width: 2; }
+  .tip-b svg > circle:last-child { fill: var(--on-accent); r: .9; }
   .tip-c {
     position: absolute; top: calc(100% + 9px); left: 50%; transform: translateX(-50%);
     width: max-content; max-width: 240px; text-align: left;
@@ -2926,9 +3027,8 @@
   .tip:hover .tip-c, .tip:focus-within .tip-c { opacity: 1; }
   /* Card-sized mark: smaller, and quiet until the card is under the pointer. */
   .tip-sm { margin-left: 5px; }
-  .tip-sm .tip-b { width: 16px; height: 16px; color: var(--line-strong); }
+  .tip-sm .tip-b { width: 16px; height: 16px; color: var(--accent); }
   .tip-sm .tip-b svg { width: 13px; height: 13px; }
-  .card:hover .tip-sm .tip-b { color: var(--muted); }
   .tip-sm:hover .tip-b { color: var(--accent); background: none; }
   @media (prefers-reduced-motion: reduce) { .tip-c { transition: none; } }
 
@@ -4416,9 +4516,9 @@
     runLog: [],               // one entry per completed run — see RUN_KEY
     runDrawer: null,    // which run's timeline is open in the drawer
     olOpen: null,       // which order list is expanded; null = the newest, '' = none
-    // Tables whose leading columns the planner has unpinned, by table name.
-    // Pinned is the default, so only an unfreeze is recorded.
-    unfrozen: {},
+    // How many leading columns the planner has pinned, by table name; 0 is
+    // none. A table with no entry pins its default set.
+    frzCols: {},
     fcOpen: null,       // which uploaded file is expanded on the versions page       // which order list in the log is expanded            // which run has its detail expanded
     // Which rail item you arrived by, when the screen belongs to more than one.
     // Cleared by any move through the cycle, so it only ever describes the trip
@@ -4486,9 +4586,6 @@
     mxPage: 0, mxSize: 100,
     fcLoading: null,   // { t0, stages } while the file is being read
     imGapsOnly: false,
-    // null = every tag. The tag is the first thing a planner narrows by, because
-    // it is what decides whether a line is planned at all.
-    imTagFilter: null,
     stockDrawer: null,   // 'rm' | 'pm' | 'ch' | 'accuracy' | null
     pTrigger: 'close',
     simulate: false,
@@ -5025,6 +5122,7 @@
       state.imSort = 'desc'; state.imDir = 1;
     }
     state.step = n;
+    state.fcIntroShown = false;
     // The rail passes its own key; every other route — a step button, the
     // stepper, a notice, the hero — passes nothing, which is what keeps
     // Planning lit all the way through the cycle.
@@ -7303,30 +7401,33 @@ ${unitBoardHtml()}
 
     if (!state.raw) {
       const mine = state.assignedUnits;
+      // Nobody starts a cycle with no business unit, so the first is picked for
+      // them; they switch if it is not the one.
+      if (!scopeUnits().length && mine.length) setScope([mine[0]]);
       const sc = scopeUnits();
+      // The card animates in once per visit, not on every re-render a click causes.
+      const intro = !state.fcIntroShown;
+      state.fcIntroShown = true;
       const nsc = sc.length;
-      const plants = nsc ? esc(unitName(sc[0])) : 'the business unit you pick';
-      // Bands rather than cards. Each one is a single decision, centred, running
-      // the full width — so the eye goes straight down the page in the order the
-      // work happens rather than hunting across two columns.
+      // Two panes in one card, read left to right in the order the work
+      // happens: which business unit, then its file. They stack on a narrow
+      // screen.
       return `
-        <section class="startcard startcard-solo${nsc ? '' : ' is-locked'}">
+        <section class="startcard startcard-solo sc-split${nsc ? '' : ' is-locked'}${intro ? ' sc-intro' : ''}">
           <div class="pickzone">
             <div class="sc-h">
-              <span class="sc-step ${nsc ? 'sc-step-done' : ''}" aria-hidden="true">${nsc ? TICK : '1'}</span>
-              <h3 class="sc-t">Choose the business unit</h3>
+              ${/* One at a time. A plan is a business unit's plan — its forecast,
+                   its stock, its approver and its requisition numbering are all
+                   per BU — so picking several was offering something the rest of
+                   the cycle could not honour. */ ''}
+              <h3 class="sc-t">Choose the business unit${infoTip(nsc
+                ? `Planning ${unitName(sc[0])} · only rows for ${sc[0]} are read from the file.`
+                : `${fmt(mine.length)} to choose from · nothing can be imported until one is picked. One business unit is planned at a time.`)}</h3>
             </div>
-            ${/* One at a time. A plan is a business unit's plan — its forecast,
-                 its stock, its approver and its requisition numbering are all
-                 per BU — so picking several was offering something the rest of
-                 the cycle could not honour. */ ''}
-            <p class="sc-p sc-p-pick">${nsc
-              ? `Planning <b>${esc(unitName(sc[0]))}</b> · only rows for ${esc(sc[0])} are read from the file.`
-              : `${fmt(mine.length)} to choose from · nothing can be imported until one is picked. One business unit is planned at a time.`}</p>
-            <div class="plantpick">
-              ${mine.map(c => {
+            <div class="plantpick" role="radiogroup" aria-label="Business unit">
+              ${mine.map((c, i) => {
                 const on = state.fcScope.includes(c);
-                return `<button class="pp ${on ? 'on' : ''}${c === state.myUnit ? ' pp-mine' : ''}" data-scope="${esc(c)}"
+                return `<button class="pp ${on ? 'on' : ''}${c === state.myUnit ? ' pp-mine' : ''}" data-scope="${esc(c)}" style="--i:${i}"
                   role="radio" aria-checked="${on}" title="${c === state.myUnit ? 'The business unit you are working in' : esc(unitName(c))}">
                   <span class="pp-box" aria-hidden="true">${on ? TICK : ''}</span>
                   <span class="pp-n">${esc(unitName(c))}</span>
@@ -7336,9 +7437,11 @@ ${unitBoardHtml()}
             </div>
           </div>
 
+          <div class="sc-up">
           <div class="sc-h">
-            <span class="sc-step" aria-hidden="true">2</span>
-            <h3 class="sc-t">Import the Rolling FC from Sales</h3>
+            <h3 class="sc-t">Upload sales forecast${infoTip(nsc
+              ? `We read every row for ${unitName(sc[0])}. Rows for any other business unit are set aside. Nothing saves until you review it.`
+              : 'Pick a business unit first and this opens.')}</h3>
             <span class="sc-h-gap"></span>
             ${/* Building the forecast by hand is one of the two ways to start,
                  not a caveat on the other one. As bare underlined text beside a
@@ -7352,9 +7455,6 @@ ${unitBoardHtml()}
               Start from scratch
             </button>
           </div>
-          <p class="sc-p">${nsc
-            ? `We read every row for <b>${plants}</b>. Rows for any other business unit are set aside. Nothing saves until you review it.`
-            : 'Pick a business unit above and this opens.'}</p>
 
           <div class="drop" id="drop">
             <div class="drop-art" aria-hidden="true">
@@ -7363,47 +7463,50 @@ ${unitBoardHtml()}
                 <path class="drop-art-arrow" d="M24 34.5V19M18 25l6-6 6 6"/>
               </svg>
             </div>
-            <div class="drop-h">Drag the Rolling FC export here</div>
-            <div class="drop-or">.csv, up to 20 MB</div>
+            ${/* Locked, the box says what opens it — the reason used to sit
+                 under the heading and now lives in its info mark. */ ''}
+            <div class="drop-h">${nsc ? 'Drag sales forecast here' : 'Pick a business unit first'}</div>
+            <div class="drop-or">${nsc ? `.csv, up to 20 MB · only ${esc(sc[0])} rows are read` : '.csv, up to 20 MB'}</div>
             <input type="file" id="fcFile" accept=".csv,text/csv,.txt" style="display:none">
             <button class="btn btn-p drop-btn" id="pickFile" ${nsc ? '' : 'disabled'}>Choose a file</button>
             ${state.fcError ? `<div class="note note-flag drop-err">${esc(state.fcError)}</div>` : ''}
-          </div>
-
-          <div class="sc-f">
-            <button class="sc-link" id="sampleCsv" title="The Rolling FC export as Sales send it — edit it and drop it back in">
-              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 3v9M6.3 8.4 10 12.1l3.7-3.7M4 14.5v1.2A1.3 1.3 0 0 0 5.3 17h9.4a1.3 1.3 0 0 0 1.3-1.3v-1.2"/>
-              </svg>
-              Sample CSV
-            </button>
-            <span class="sc-f-sep" aria-hidden="true"></span>
-            <span class="tip tip-wide sc-tip">
-              <button class="sc-link tip-trigger">What the file needs</button>
-              <span class="tip-c tip-rich" role="tooltip">
-                <span class="rq">
-                  <span class="rq-h rq-ok">✓ Must include</span>
-                  <span class="rq-i"><b>FG item code</b> — must exist on the item master</span>
-                  <span class="rq-i"><b>Manufacturing unit</b> — business unit code such as NFM or JFM</span>
-                  <span class="rq-i"><b>Three monthly quantity columns</b>, side by side in month order</span>
-                  <span class="rq-i muted">UOM and description are optional</span>
-                </span>
-                <span class="rq">
-                  <span class="rq-h rq-warn">⚠ What gets caught</span>
-                  <span class="rq-i"><b>Negative quantity</b> — row quarantined</span>
-                  <span class="rq-i"><b>Unknown item code</b> — quarantined, carries no demand</span>
-                  <span class="rq-i"><b>Blank month</b> — read as zero and reported back</span>
-                  <span class="rq-i"><b>A business unit you did not pick</b> — set aside, not imported</span>
-                </span>
-                <span class="rq">
-                  <span class="rq-h rq-tip">💡 Tips for the best result</span>
-                  <span class="rq-i"><b>CSV only.</b> Save the Rolling FC sheet as CSV first</span>
-                  <span class="rq-i"><b>The header row is found for you</b> — preamble above it is fine</span>
-                  <span class="rq-i"><b>Commas inside quoted text</b> are handled</span>
-                  <span class="rq-i">Column names can change — the mapping step handles that</span>
+            <div class="sc-f">
+              <button class="sc-link" id="sampleCsv" title="The Rolling FC export as Sales send it — edit it and drop it back in">
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 3v9M6.3 8.4 10 12.1l3.7-3.7M4 14.5v1.2A1.3 1.3 0 0 0 5.3 17h9.4a1.3 1.3 0 0 0 1.3-1.3v-1.2"/>
+                </svg>
+                Sample CSV
+              </button>
+              <span class="sc-f-sep" aria-hidden="true"></span>
+              <span class="tip tip-wide sc-tip">
+                <button class="sc-link tip-trigger">What the file needs</button>
+                <span class="tip-c tip-rich" role="tooltip">
+                  <span class="rq">
+                    <span class="rq-h rq-ok">✓ Must include</span>
+                    <span class="rq-i"><b>FG item code</b> — must exist on the item master</span>
+                    <span class="rq-i"><b>Manufacturing unit</b> — business unit code such as NFM or JFM</span>
+                    <span class="rq-i"><b>Three monthly quantity columns</b>, side by side in month order</span>
+                    <span class="rq-i muted">UOM and description are optional</span>
+                  </span>
+                  <span class="rq">
+                    <span class="rq-h rq-warn">⚠ What gets caught</span>
+                    <span class="rq-i"><b>Negative quantity</b> — row quarantined</span>
+                    <span class="rq-i"><b>Unknown item code</b> — quarantined, carries no demand</span>
+                    <span class="rq-i"><b>Blank month</b> — read as zero and reported back</span>
+                    <span class="rq-i"><b>A business unit you did not pick</b> — set aside, not imported</span>
+                  </span>
+                  <span class="rq">
+                    <span class="rq-h rq-tip">💡 Tips for the best result</span>
+                    <span class="rq-i"><b>CSV only.</b> Save the Rolling FC sheet as CSV first</span>
+                    <span class="rq-i"><b>The header row is found for you</b> — preamble above it is fine</span>
+                    <span class="rq-i"><b>Commas inside quoted text</b> are handled</span>
+                    <span class="rq-i">Column names can change — the mapping step handles that</span>
+                  </span>
                 </span>
               </span>
-            </span>
+            </div>
+          </div>
+
           </div>
         </section>
 
@@ -7911,7 +8014,6 @@ ${unitBoardHtml()}
                       || (m.fg || '').toLowerCase().includes(q)
                       || ((fgOf(m) || {}).desc || '').toLowerCase().includes(q))
       .filter(m => fltKeep('imMat', defs, m))
-      .filter(m => state.imTagFilter == null || m.tag === state.imTagFilter)
       .filter(m => !state.imGapsOnly || gapsOf(m).length);
   }
 
@@ -8126,6 +8228,7 @@ ${unitBoardHtml()}
     k: String(j), label: MRP.cols[j], get: r => MRP.val(r, j), values: MRP.dict[j] || []
   }));
   const IM_MAT_DEFS = () => [
+    { k:'tag',  label:'Tag',      get: m => `Tag ${m.tag}`, values: [0, 1, 2, 3, 4].map(t => `Tag ${t}`) },
     { k:'unit', label:'Plant',    get: m => m.unit, values: state.assignedUnits },
     { k:'cat',  label:'Category', get: m => m.cat,  values: fltValues(MATERIALS, m => m.cat) },
     { k:'uom',  label:'UOM',      get: m => m.uom,  values: fltValues(MATERIALS, m => m.uom) },
@@ -8378,21 +8481,6 @@ ${unitBoardHtml()}
         : imFilterBar('imMat', IM_MAT_DEFS(),
             `<button class="chip chip-s ${state.imGapsOnly ? 'on' : ''}" id="imGaps">Missing data${withGaps.length ? ` · ${fmt(withGaps.length)}` : ''}</button>`,
             imTabsHtml(masterTab, fgTab, inCycle), `${fmt(rows.length)} of ${fmt(total)}`)}
-      ${fgTab ? '' : (() => {
-        // Counted before the tag filter is applied, so the numbers do not move
-        // as you click between them.
-        const pool = MATERIALS.filter(m => imUnits().includes(m.unit));
-        const n = t => pool.filter(m => m.tag === t).length;
-        const chip = (k, label, count, title) => `<button class="chip chip-s ${state.imTagFilter === k ? 'on' : ''}"
-          data-imtag="${k == null ? '' : k}" title="${esc(title)}" ${count ? '' : 'disabled'}>${label}${
-          count ? `<span class="chip-n">${fmt(count)}</span>` : ''}</button>`;
-        return `<div class="tagfilter">
-          <span class="tagfilter-l">Filter by tag</span>
-          ${chip(null, 'All', pool.length, 'Every material at the business unit you plan')}
-          ${[0, 1, 2, 3, 4].map(t => chip(t, `Tag ${t}`, n(t),
-            `${TAG_MEANING[t]} \u00b7 ${TAG_LOGIC(t)}`)).join('')}
-        </div>`;
-      })()}
         <div class="mxwrap"><table class="imtable">
           ${fgTab ? `
           <thead><tr>
@@ -9415,34 +9503,64 @@ ${unitBoardHtml()}
   // A table wider than its panel keeps its identifying columns — the checkbox
   // and the material — pinned while the figures scroll, with a toggle to let
   // them go. Only tables that actually overflow get either; the extract grid
-  // and item master have their own freeze control and are left alone.
+  // has its own freeze control and is left alone. The item master pins its
+  // first three columns.
   function freezeTables(root) {
-    root.querySelectorAll('.scroll > table').forEach(t => {
-      if (t.matches('.mx, .imtable, .maptable')) return;
+    root.querySelectorAll('.scroll > table, .mxwrap > table.imtable').forEach(t => {
+      if (t.matches('.mx, .maptable')) return;
       const wrap = t.parentElement;
       t.querySelectorAll('.frz').forEach(c => { c.classList.remove('frz', 'frz-last'); c.style.left = ''; });
-      let bar = wrap.previousElementSibling && wrap.previousElementSibling.classList.contains('frz-bar')
-        ? wrap.previousElementSibling : null;
+      t.querySelectorAll('.frz-pin').forEach(b => b.remove());
+      t.querySelectorAll('.has-pin').forEach(c => c.classList.remove('has-pin'));
+      // The item master has a toolbar of its own; its control sits there, beside
+      // the CSV button, rather than on a line above the table.
+      const tools = t.matches('.imtable') ? root.querySelector('.imbar') : null;
+      let bar = tools ? tools.querySelector('.frz-bar')
+        : wrap.previousElementSibling && wrap.previousElementSibling.classList.contains('frz-bar')
+          ? wrap.previousElementSibling : null;
       if (wrap.scrollWidth <= wrap.clientWidth + 1) { if (bar) bar.remove(); return; }
-      const key = t.getAttribute('aria-label') || 'table';
-      const on = !state.unfrozen[key];
-      if (!bar) { bar = document.createElement('div'); bar.className = 'frz-bar'; wrap.before(bar); }
-      bar.innerHTML = `<span class="muted">${on ? 'First columns pinned — scroll sideways for the rest' : 'Scroll sideways for more columns'}</span>
-        <button class="btn btn-s btn-ghost" aria-pressed="${on}">${on ? 'Unfreeze columns' : 'Freeze columns'}</button>`;
-      bar.querySelector('button').onclick = () => {
-        if (on) state.unfrozen[key] = true; else delete state.unfrozen[key];
-        freezeTables(root);
-      };
-      if (!on) return;
       const plain = r => ![...r.cells].some(c => c.colSpan > 1);
       const head = t.tHead && t.tHead.rows[0];
       const body = [...t.querySelectorAll('tbody tr')].find(plain);
       if (!head || !body) return;
+      const key = t.getAttribute('aria-label') || 'table';
       // Up to and including the material column, and never more than two.
       const mat = [...body.cells].findIndex(c => c.querySelector('.cell-code'));
-      const n = Math.min(mat >= 0 ? mat + 1 : 1, 2);
+      const dflt = t.matches('.imtable') ? 3 : Math.min(mat >= 0 ? mat + 1 : 1, 2);
+      const set = k => { state.frzCols[key] = k; freezeTables(root); };
+      // Room for the pin goes in before anything is measured.
+      [...head.cells].forEach(c => c.classList.toggle('has-pin', !!c.textContent.trim()));
+      // Pinned columns never take more of the panel than leaves room to
+      // scroll the rest; a pin past that stops at the last one that fits.
       const lefts = [];
-      for (let i = 0, x = 0; i < n; i++) { lefts.push(x); x += head.cells[i].getBoundingClientRect().width; }
+      let n = Math.min(state.frzCols[key] ?? dflt, head.cells.length);
+      for (let i = 0, x = 0; i < n; i++) {
+        if (i && x + head.cells[i].getBoundingClientRect().width > wrap.clientWidth - 160) { n = i; break; }
+        lefts.push(x); x += head.cells[i].getBoundingClientRect().width;
+      }
+      [...head.cells].forEach((c, i) => {
+        if (!c.classList.contains('has-pin')) return;
+        const pin = document.createElement('button');
+        pin.type = 'button';
+        pin.className = 'frz-pin' + (i < n ? ' on' : '');
+        pin.title = i === n - 1 ? 'Unpin this column' : `Pin columns 1 to ${i + 1}`;
+        pin.setAttribute('aria-label', pin.title);
+        pin.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h4M6.8 2v4.2L4.5 9h7L9.2 6.2V2M8 9v5"/></svg>';
+        pin.onclick = e => { e.stopPropagation(); set(i === n - 1 ? i : i + 1); };
+        c.append(pin);
+      });
+      if (!bar) {
+        bar = document.createElement(tools ? 'span' : 'div');
+        bar.className = 'frz-bar' + (tools ? ' frz-bar-in' : '');
+        if (tools) tools.insertBefore(bar, tools.querySelector('#imCsv')); else wrap.before(bar);
+      }
+      const tip = n
+        ? `${n} column${n === 1 ? '' : 's'} pinned. Scroll sideways for the rest — the pin on any heading pins up to that column.`
+        : 'Scroll sideways for more columns. The pin on any heading holds the columns up to it in place.';
+      const word = n ? 'Unfreeze' : 'Freeze';
+      bar.innerHTML = `<button class="btn btn-s btn-ghost" aria-pressed="${!!n}">${tools ? word : `${word} columns`}</button>
+        ${infoTip(tip).replace('class="tip"', 'class="tip frz-tip"')}`;
+      bar.querySelector('button').onclick = () => set(n ? 0 : dflt);
       [...t.rows].filter(plain).forEach(r => {
         for (let i = 0; i < n && i < r.cells.length; i++) {
           r.cells[i].classList.add('frz');
@@ -10033,6 +10151,15 @@ ${unitBoardHtml()}
               : 'Waiting on their reply.'}
           </p>` : ''}
         </div>
+        ${req && !answered ? `<button class="refresh-b" id="apCheck" title="Check for a reply" aria-label="Check for a reply">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16 3.8v3.6h-3.6"/>
+          </svg>
+        </button>` : answered ? `<span class="refresh-b is-done" role="img" title="Reply received" aria-label="Reply received">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 10.4 8.2 14l7.3-7.8"/>
+          </svg>
+        </span>` : ''}
       </div>
 
       ${state.simulate ? `
@@ -10097,9 +10224,8 @@ ${unitBoardHtml()}
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
-          ${req && !answered ? '<button class="btn btn-p btn-lg step-b" id="apCheck">Check for a reply</button>' : ''}
           ${answered && bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
-          <button class="btn btn-s btn-ghost" data-step="${STEP_ORDERS}">Back to the order list</button>
+          <button class="btn btn-o btn-lg" data-step="0">Back to dashboard</button>
           ${cycleState().k === 'closed' ? '<button class="btn btn-o btn-lg" id="nextCycle">Start the next plan</button>' : ''}
         </div>
         <div class="step-sub">
@@ -10108,7 +10234,7 @@ ${unitBoardHtml()}
             : !req
             ? `Nothing has gone out yet. The list is sent from the order list, where you can read it first — it goes to ${esc(approverFor(state.myUnit))} as an email they answer from their inbox.`
             : !answered
-            ? `Waiting on ${esc(req.to)}. Once they approve it in the email it will be reflected here — no PR can be raised until then.`
+            ? `Waiting on ${esc(req.to)}. Once they approve it in the email it will be reflected here — refresh at the top to check. No PR can be raised until then.`
             : `${fmt(app.length)} of ${fmt(orders.length)} approved · ${aedM(val(app))}${rej.length ? ` · ${fmt(rej.length)} rejected and not carried forward` : ''} · ${aedM(balVal)} still to raise`}</p>
         </div>
       </div>
@@ -11750,11 +11876,12 @@ ${unitBoardHtml()}
 
     // Which plants this cycle covers. Every screen that shows the chips wires
     // them the same way, so the answer is set in one place.
-    // Radio behaviour: a second click on the same one clears it, any other
-    // click replaces it. setScope keeps at most one either way.
+    // Radio behaviour: a click picks that one. There is always one picked, so
+    // clicking the picked one does nothing rather than clearing it.
     document.querySelectorAll('[data-scope]').forEach(b => b.onclick = () => {
       const c = b.dataset.scope;
-      setScope(state.fcScope.includes(c) ? [] : [c]);
+      if (state.fcScope.includes(c)) return;
+      setScope([c]);
       render();
     });
 
@@ -11805,18 +11932,11 @@ ${unitBoardHtml()}
     const imGaps = $('#imGaps'); if (imGaps) imGaps.onclick = () => { state.imGapsOnly = !state.imGapsOnly; render(); };
 
     // ---- the item master's filters, sort and tabs ----------------------------
-    document.querySelectorAll('[data-imtag]').forEach(b => b.onclick = () => {
-      const v = b.dataset.imtag;
-      state.imTagFilter = v === '' ? null : +v;
-      render();
-    });
-
     document.querySelectorAll('[data-imtab]').forEach(b => b.onclick = () => {
       state.imTab = b.dataset.imtab;
       // The two masters do not share columns, so a sort or a category filter
       // held from the other one would land on a column that is not there.
       state.imSort = state.imTab === 'fg' ? 'code' : 'desc';
-      state.imTagFilter = null;
       state.mxPage = 0;
       state.imDir = 1;
       render(); window.scrollTo(0, 0);
@@ -12042,12 +12162,9 @@ ${unitBoardHtml()}
       const req = state.approvalReq;
       if (!req || apCheck.dataset.busy) return;
       apCheck.dataset.busy = '1';
-      apCheck.classList.add('btn-busy');
+      apCheck.classList.add('is-busy');
       apCheck.setAttribute('aria-busy', 'true');
-      // Pinned before the label is swapped: the waiting text is longer, and a
-      // button that grows under the cursor reads as the bar rebuilding itself.
-      apCheck.style.minWidth = apCheck.offsetWidth + 'px';
-      apCheck.innerHTML = '<span class="spin-s" aria-hidden="true"></span>Checking for a reply';
+      apCheck.title = 'Checking for a reply…';
       setTimeout(() => finishApCheck(req), 1100);
     };
 

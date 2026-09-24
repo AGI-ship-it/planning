@@ -1018,9 +1018,12 @@
   /* The table page is exactly the window: main stops growing and the scroller
      takes what is left. */
   main.grid-page { height: 100vh; overflow: hidden; padding-bottom: 22px; }
+  /* The step bar is fixed over the page, so a full-height grid page keeps its
+     height clear — otherwise the last rows and the count sit behind it. */
+  main.grid-page:has(.step-bar) { padding-bottom: 96px; }
   main.grid-page .stephead { position: static; }
   main.grid-page > * { flex: none; }
-  main.grid-page .imtitle { margin-top: 2px; }
+  main.grid-page .imtitle { margin-top: 0; }
   main.grid-page .mxwrap { flex: 1 1 auto; min-height: 0; max-height: none; }
 
   .mxbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
@@ -1201,7 +1204,8 @@
     text-transform: uppercase; color: var(--faint); margin-right: 2px;
   }
 
-  .imbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .imbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .imcount { margin: 8px 0 14px; font-size: var(--fs-xs); color: var(--muted); text-align: right; }
   .imbar-gap { flex: 1; min-width: 0; }
   .imtabs, .mxbar .imtabs { display: inline-flex; align-items: center; gap: 6px; }
   .imtabs-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
@@ -1226,12 +1230,28 @@
      rows of a screen that is exactly the window tall. */
   .imtitle {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin: 0 0 12px; min-width: 0;
+    margin: 0 0 6px; min-width: 0;
   }
   .imtitle h1 {
     margin: 0; font-size: var(--fs-md); font-weight: var(--w-semi); letter-spacing: -.015em; color: var(--ink);
   }
-  .imtitle span { font-size: var(--fs-xs); color: var(--muted); min-width: 0; }
+  .imtitle > span { font-size: var(--fs-xs); color: var(--muted); min-width: 0; }
+  /* The title sits in the filter row: same height as the controls beside it,
+     its count in a chip rather than as a second line of prose. */
+  .imh1 {
+    margin: 0 6px 0 0; font-size: var(--fs-md); font-weight: var(--w-semi); letter-spacing: -.015em;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  }
+  .imh1-n {
+    font-size: var(--fs-label); font-weight: var(--w-bold); color: var(--muted);
+    background: var(--surface-2); border-radius: var(--r-pill); padding: 2px 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The rest of the item master, at the end of the title line: named, quiet,
+     and never mistaken for the page you are on. */
+  .imref { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .btn.imref-b { display: inline-flex; align-items: center; gap: 7px; }
+  .imref-n { font-size: var(--fs-label); color: var(--faint); font-variant-numeric: tabular-nums; }
   @media (max-width: 900px) { .imtitle span { display: none; } }
 
   .imtable { min-width: 1180px; }
@@ -1264,6 +1284,15 @@
      or the generic 12px rule sets the row height on its own. */
   .imtable td select, .imtable td input { font-size: var(--fs-xs); }
   .imtable td { vertical-align: middle; }
+  /* Tighter than the extract: these rows carry a code over its description and
+     a row of controls, so the padding and the leading both come in. */
+  table.imtable tbody td { padding-top: 3px; padding-bottom: 3px; line-height: 1.35; font-size: 11px; }
+  /* The controls in a cell read at the row's size, not the grid's default. */
+  table.imtable tbody td select, table.imtable tbody td input,
+  table.imtable tbody td .cell-code, table.imtable tbody td .cell-desc,
+  table.imtable tbody td .pill { font-size: 11px; }
+  .imtable td .cell-code, .imtable td .cell-desc { line-height: 1.3; }
+  .imtable td select, .imtable td input { padding-top: 3px; padding-bottom: 3px; }
   .imtable .pill { font-size: var(--fs-micro); }
 
   /* Cells you can type in. Borderless until touched, so a grid of inputs does
@@ -1364,9 +1393,8 @@
      and keeps the only solid button on the card. */
   .sc-alt { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; align-self: center; }
   .sc-alt svg { width: 13px; height: 13px; flex: none; display: block; }
-  /* The card sits in the middle of the space under the stepper rather than
-     hugging the top of it. */
-  .sc-stage { min-height: calc(100vh - 230px); display: flex; flex-direction: column; justify-content: center; }
+  /* The card sits under the stepper, with a little air between them. */
+  .sc-stage { display: flex; flex-direction: column; margin-top: 28px; }
   .sc-stage > div:empty { display: none; }
   /* Doubled class: .startcard and .startcard-solo come later and set flex and
      the narrower width. */
@@ -1674,10 +1702,31 @@
      less and content scrolls up into the strip of gap above the bar. */
   .pagehead {
     display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    /* The card stays put while the page scrolls under it. It needs the strip
+       above and beside it covered too, or rows slide through that gap and read
+       as content sitting on top of the header. */
     position: sticky; top: 12px; z-index: 20;
-    margin: -22px 0 14px; padding: 12px 18px;
-    background: var(--surface); border-radius: var(--r-xl);
-    box-shadow: 0 1px 2px rgba(29, 18, 38, .04), 0 6px 18px -12px rgba(29, 18, 38, .14);
+    margin: -22px 0 14px; padding: 12px 0;
+    background: none;
+  }
+  /* The page's own ground behind it, out to the edges, so nothing scrolls
+     through the strip above or beside the card. */
+  .pagehead::before {
+    content: ''; position: absolute; inset: -34px -44px -2px; z-index: -1;
+    background-color: var(--ground);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  /* A soft edge under the bar only — the width of its own content, from the
+     greeting to the button, and nothing down its sides. */
+  .pagehead::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 6px;
+    z-index: -1; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(29, 18, 38, .11), rgba(29, 18, 38, 0));
+    /* Thinned at both ends so it fades out at the corners rather than stopping
+       square. */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
   }
   /* Centred against the greeting block as a whole — its midpoint sits between
      the two lines, which is where the button belongs. */
@@ -1704,10 +1753,10 @@
   .greet {
     margin: 0; font-size: var(--fs-lg); font-weight: var(--w-semi); letter-spacing: -.015em;
   }
-  .greet-e { font-size: var(--fs-md); margin-left: 2px; }
+  .greet-e { font-size: var(--fs-xl); margin-right: 8px; vertical-align: -1px; }
   .greet-date {
     display: flex; align-items: center; gap: 7px;
-    margin: 0 0 2px; font-size: var(--fs-micro); font-weight: var(--w-semi);
+    margin: 3px 0 0; font-size: var(--fs-xs); font-weight: var(--w-semi);
     letter-spacing: .11em; color: var(--muted); white-space: nowrap;
   }
   .greet-date span { font-size: var(--fs-label); line-height: 1; }
@@ -1720,9 +1769,11 @@
   /* ---------- circle stepper ---------- */
   /* Columns follow the number of steps rather than a fixed count — a hardcoded
      column count silently wraps the last step onto its own row when one is added. */
+  /* Held to a readable width and centred: run end to end and the dotted joins
+     stretch halfway across the screen between four small labels. */
   .stepper {
-    list-style: none; margin: 18px 0 34px; padding: 0;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(120px, 1fr);
+    list-style: none; margin: 14px auto 22px; padding: 0; max-width: 780px;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(110px, 1fr);
     gap: 0; overflow-x: auto;
   }
   .stp { position: relative; min-width: 0; }
@@ -2235,8 +2286,9 @@
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     padding: 12px 16px; border-bottom: 1px solid var(--line); background: transparent;
   }
-  .panel-h h3 { margin: 0; font-size: var(--fs-base); font-weight: var(--w-semi); }
-  .panel-h p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); }
+  .panel-h h3 { margin: 0 0 8px; font-size: var(--fs-base); font-weight: var(--w-semi); }
+  .panel-h h3:only-child { margin-bottom: 0; }
+  .panel-h p { margin: 0 0 8px; font-size: var(--fs-xs); color: var(--muted); }
   .panel-b { padding: 14px 16px; }
 
   /* ---------- stats ---------- */
@@ -2506,6 +2558,9 @@
   .chk-sel { font-size: var(--fs-xs); padding: 3px 9px; max-width: 100%; }
 
   .scroll { overflow-x: auto; }
+  /* A long list keeps its own window: the page stays one screen and the table
+     scrolls inside it, headings pinned. */
+  .scroll-tall { max-height: 420px; overflow-y: auto; }
   /* A table wider than its panel scrolls sideways; keyboard users reach that
      by focusing the region, so the focus has to be visible. */
   .scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
@@ -2837,10 +2892,6 @@
   /* The raise row opens inside the table rather than in a drawer: the balance,
      the input and the history of what has already gone all belong to one line,
      and pulling them out of the row loses which line they belong to. */
-  .pofilter {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
-    background: var(--group); border-radius: var(--r-lg); padding: 11px 14px; margin-top: 4px;
-  }
   .co-row > td { background: var(--group); padding: 0; }
   .co-box { padding: 14px 16px; }
   .co-form { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -4849,7 +4900,7 @@
     { from: 5,  to: 12, text:'Good morning',   emoji:'\u2600\uFE0F'  },  // 05:00-11:59  sun
     { from: 12, to: 17, text:'Good afternoon', emoji:'\uD83C\uDF24\uFE0F' },  // 12:00-16:59  sun behind cloud
     { from: 17, to: 21, text:'Good evening',   emoji:'\uD83C\uDF06'  },  // 17:00-20:59  dusk
-    { from: 21, to: 29, text:'Hello',          emoji:'\uD83C\uDF19'  }   // 21:00-04:59  moon
+    { from: 21, to: 29, text:'Hello',          emoji:'\uD83D\uDC4B'  }   // 21:00-04:59  a wave, not a moon
   ];
 
   function greetingBand(now = new Date()) {
@@ -6326,6 +6377,7 @@
                the moment the page was read at. */ ''}
           <p class="greet-s"><b>${esc(cycleName())}</b> · read at ${esc(dStamp(new Date()))}</p>
         </div></div>
+        ${poControlsHtml()}
       </div>
 
       ${poBody()}
@@ -6337,6 +6389,26 @@
   // from six raises six — which is what makes the filter at the top mean
   // anything, and what the review was pointing at with "there will be PR issued
   // to multiple suppliers also, the same item, multiple suppliers".
+  // Supplier is a filter on the whole page, so it sits in the page head rather
+  // than in a band of its own above the table.
+  function poControlsHtml() {
+    const mineBook = state.book.filter(b => b.unit === state.myUnit);
+    const mineOrders = state.prs.filter(r => r.unit === state.myUnit);
+    const sups = [...new Set([...mineOrders, ...mineBook].map(x => x.supplier).filter(Boolean))].sort();
+    const sup = sups.includes(state.poSup) ? state.poSup : '';
+    const waiting = mineOrders.filter(r => (!sup || r.supplier === sup) && (r.status || 'pr') === 'pr');
+    if (!mineBook.length) return '';
+    return `<div class="head-actions rowflex" style="gap:10px">
+      <label class="rowflex" style="gap:8px">
+        <span class="label" style="margin:0">Supplier</span>
+        <select id="poSup" aria-label="Filter purchase orders by supplier" style="min-width:200px">
+          <option value="">All suppliers (${fmt(sups.length)})</option>
+          ${sups.map(x => `<option value="${esc(x)}" ${x === sup ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+        </select>
+      </label>
+    </div>`;
+  }
+
   function poBody() {
     const mineBook = state.book.filter(b => b.unit === state.myUnit);
     const mineOrders = state.prs.filter(r => r.unit === state.myUnit);
@@ -6363,10 +6435,10 @@
       <section class="group">
         <div class="empty">
           ${emptyArt('box')}
-          <div class="empty-t">No approved lines yet</div>
-          <p class="empty-p">Once the approver answers, every approved line lands here. Raise a PR against a line for as much of
-             it as you need now; whatever is not raised stays as a balance until the next PR — including across a month
-             boundary, so a September balance can be raised in October.</p>
+          <div class="empty-t">No requisition raised yet</div>
+          <p class="empty-p">Raise a PR from the approval screen or the order list and it appears here — first as a raised PR
+             waiting on Dynamics, then under PO issued once the purchase order is out. Anything the approver turned down is
+             listed here too.</p>
           <button class="btn btn-p" data-step="0">Back to dashboard</button>
         </div>
       </section>`;
@@ -6436,12 +6508,6 @@
       return `
         <tr>
           ${selCell(b, null, showSel)}
-          <td style="max-width:34ch">
-            <div class="cell-code">${esc(b.code)}</div>
-            <div class="cell-desc">${esc(b.desc)}</div>
-          </td>
-          <td>${prPill(k)}<div class="cell-desc">${PR_STATUS[k].d}</div></td>
-          <td>${esc(b.supplier || 'Unassigned')}</td>
           ${/* When the line was approved, and how long it has been sitting. A
                balance does not expire with its plan, so age is the thing that
                decides whether it still needs chasing. */ ''}
@@ -6452,6 +6518,12 @@
               ${days != null ? `<div class="cell-desc">${esc(b.cycle || '')} · ${days === 0 ? 'today' : `${fmt(days)} day${days === 1 ? '' : 's'} ago`}</div>` : ''}
             </td>`;
           })()}
+          <td style="max-width:34ch">
+            <div class="cell-code">${esc(b.code)}</div>
+            <div class="cell-desc">${esc(b.desc)}</div>
+          </td>
+          <td>${prPill(k)}<div class="cell-desc">${PR_STATUS[k].d}</div></td>
+          <td>${esc(b.supplier || 'Unassigned')}</td>
           <td class="r num">${fmt(b.req)} <span class="muted">${esc(b.uom)}</span></td>
           <td class="r num">
             ${fmt(raised)}
@@ -6468,69 +6540,45 @@
       (balanceOf(y) > 0) - (balanceOf(x) > 0) || new Date(y.at) - new Date(x.at));
     const showSel = selectable(lines).length > 0;
 
+    // Three tables, in the order a requisition travels: raised, turned down,
+    // and turned into a purchase order. Raising happens on the approval and
+    // order-list screens; this page reports.
+    // All three stand whether or not they hold anything: a missing table reads
+    // as a missing feature, an empty one says where a requisition goes next.
+    const prTable = (rows, title, note, empty) => `
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-h"><div>
+          <h3>${title} <span class="imh1-n">${fmt(rows.length)}</span></h3>
+          <p>${rows.length ? note : empty}</p>
+        </div></div>
+        ${rows.length ? `<div class="scroll scroll-tall"><table>
+          <thead><tr><th>Date &amp; time</th><th>PR</th><th>Material</th><th>Status</th><th>Supplier</th><th class="r">PR qty</th><th class="r">Total raised</th><th class="r">Balance</th><th class="r col-val">Value</th><th></th></tr></thead>
+          <tbody>${rows.map(orderRow).join('')}</tbody>
+        </table></div>` : ''}
+      </div>`;
+
     return `
-      <div class="pofilter">
-        <label class="rowflex" style="gap:8px">
-          <span class="label" style="margin:0">Supplier</span>
-          <select id="poSup" aria-label="Filter purchase orders by supplier" style="min-width:220px">
-            <option value="">All suppliers (${fmt(sups.length)})</option>
-            ${sups.map(x => `<option value="${esc(x)}" ${x === sup ? 'selected' : ''}>${esc(x)}</option>`).join('')}
-          </select>
-        </label>
-        <span class="rowflex" style="gap:12px">
-          <span class="muted" style="font-size: var(--fs-xs)">
-            ${sup ? `${fmt(orders.length)} PRs and ${fmt(pending.length)} lines with a balance for ${esc(sup)}` : 'One PR per line — a line can take as many as it needs'}
-          </span>
-          ${waiting.length ? `<button class="btn btn-s btn-o" id="d365Sync">Check Dynamics (${fmt(waiting.length)} pending)</button>` : ''}
-        </span>
-      </div>
-
-      ${/* Same four-tile pattern as the forecast checks screen: colour carries the
-           state, a zero is greyed rather than coloured, and the whole strip is
-           one line high. The banner that used to sit above these said in prose
-           what the Example pills on the rows already say in place. */ ''}
-      <div class="stats tight">
-        <div class="stat ${orders.length ? 't-info' : 't-zero'}"><div class="v">${fmt(orders.length)}</div><div class="k label">Requisitions</div><div class="d">${aedM(orders.reduce((a, r) => a + valueOf(r), 0))} raised</div></div>
-        <div class="stat ${converted.length ? 't-good' : 't-zero'}"><div class="v">${fmt(converted.length)}</div><div class="k label">PO issued</div><div class="d">${waiting.length ? `${fmt(waiting.length)} still pending` : orders.length ? 'All issued' : 'None yet'}</div></div>
-        <div class="stat ${pendVal > 0 ? 't-flag' : 't-zero'}"><div class="v">${aedM(pendVal)}</div><div class="k label">Balance to raise</div><div class="d">${pending.length ? `${fmt(pending.length)} line${pending.length === 1 ? '' : 's'}` : 'Nothing left'}</div></div>
-        <div class="stat ${settled.length ? 't-good' : 't-zero'}"><div class="v">${fmt(settled.length)}</div><div class="k label">Fully raised</div></div>
-      </div>
-
-      ${lines.length ? `
-      <div class="panel">
-        <div class="panel-h">
-          <div>
-            <h3>Approved lines</h3>
-            <p>Every line the approver said yes to, what is on a PR against it so far and the balance. A line can take as
-               many PRs as it needs — use Raise PR on a line, or tick the lines you want and raise those.</p>
-          </div>
-          ${selButton(selectable(lines), showSel)}
-        </div>
-        <div class="scroll"><table>
-          <thead><tr>
-            ${selHead(selectable(lines), showSel)}<th>Material</th><th>Status</th><th>Supplier</th><th>Approved</th><th class="r">Requirement</th>
-            <th class="r">PR raised</th><th class="r col-val">Balance</th><th></th>
-          </tr></thead>
-          <tbody>${lines.map(lineRow).join('')}</tbody>
-        </table></div>
-      </div>` : ''}
+      ${prTable(waiting, 'Raised PRs',
+        `${aedM(waiting.reduce((a, r) => a + valueOf(r), 0))} raised and waiting on a purchase order in Dynamics.`,
+        'Nothing waiting on a purchase order. A requisition lands here the moment it is raised.')}
 
       ${/* Not a balance and not an order: a requirement the approver said no to.
            It has nowhere else to appear, and without it the quantity simply
            stops existing between one cycle and the next. */ ''}
       ${(() => {
         const rej = rejectedLines();
-        if (!rej.length) return '';
         const val = rej.reduce((a, r) => a + (r.value || 0), 0);
         return `
         <div class="panel" style="margin-bottom:16px">
           <div class="panel-h">
             <div>
-              <h3>Rejected at approval</h3>
-              <p>${fmt(rej.length)} line${rej.length === 1 ? '' : 's'} · ${aed(val)} the approver turned down. Nothing was raised for these — if the need stands, it comes back on the next run.</p>
+              <h3>Rejected PRs <span class="imh1-n">${fmt(rej.length)}</span></h3>
+              <p>${rej.length
+                ? `${fmt(rej.length)} line${rej.length === 1 ? '' : 's'} · ${aed(val)} the approver turned down. Nothing was raised for these — if the need stands, it comes back on the next run.`
+                : 'Nothing turned down. A line the approver rejects is listed here with their reason.'}</p>
             </div>
           </div>
-          <div class="scroll"><table>
+          ${rej.length ? `<div class="scroll scroll-tall"><table>
             <thead><tr>
               <th>Date &amp; time</th><th>Material</th><th>Reason</th><th>Plan</th>
               <th class="r">Quantity</th><th class="r col-val">Value</th>
@@ -6548,21 +6596,13 @@
               <td class="r num">${fmt(r.qty)} <span class="muted">${esc(r.uom || '')}</span></td>
               <td class="r num col-val">${aed(r.value || 0)}</td>
             </tr>`).join('')}</tbody>
-          </table></div>
+          </table></div>` : ''}
         </div>`;
       })()}
 
-      ${/* No panel header here: the page is already titled "PR status",
-           the chip above it is labelled the same way with the same count,
-           and the first stat tile counts them again. A fourth statement of the
-           same fact is not a heading, it is noise. */ ''}
-      <div class="panel">
-        ${orders.length ? `<div class="scroll"><table>
-          <thead><tr><th>Date &amp; time</th><th>PR</th><th>Material</th><th>Status</th><th>Supplier</th><th class="r">PR qty</th><th class="r">Total raised</th><th class="r">Balance</th><th class="r col-val">Value</th><th></th></tr></thead>
-          <tbody>${orders.map(orderRow).join('')}</tbody>
-        </table></div>`
-        : `<div class="panel-b"><div class="note"><strong>Nothing here.</strong> No order has been raised for this supplier yet.</div></div>`}
-      </div>
+      ${prTable(converted, 'PO issued',
+        `${aedM(converted.reduce((a, r) => a + valueOf(r), 0))} turned into a purchase order in Dynamics.`,
+        'None converted yet. Dynamics moves a requisition here once it issues the purchase order.')}
 
       <div style="margin-top:16px" class="note">
         <strong>Two sets of statuses.</strong> A line is <em>Need to raise PR</em>, <em>Partly raised</em> or
@@ -7022,9 +7062,9 @@
                  the greeting competing with it — above, small and lettered
                  out, it dates the figures on the page instead. The emoji
                  belongs to the time of day, so it moves up here with it. */ ''}
-            <p class="greet-date"><span aria-hidden="true">${greetingBand().emoji}</span>${
+            <h1 class="greet"><span class="greet-e" aria-hidden="true">${greetingBand().emoji}</span>${greetingBand().text}, ${esc(USER.short)}</h1>
+            <p class="greet-date">${
               new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}</p>
-            <h1 class="greet">${greetingBand().text}, ${esc(USER.short)}</h1>
           </div>
         </div>
       </div>
@@ -7218,9 +7258,9 @@
                  the greeting competing with it — above, small and lettered
                  out, it dates the figures on the page instead. The emoji
                  belongs to the time of day, so it moves up here with it. */ ''}
-            <p class="greet-date"><span aria-hidden="true">${greetingBand().emoji}</span>${
+            <h1 class="greet"><span class="greet-e" aria-hidden="true">${greetingBand().emoji}</span>${greetingBand().text}, ${esc(USER.short)}</h1>
+            <p class="greet-date">${
               new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}</p>
-            <h1 class="greet">${greetingBand().text}, ${esc(USER.short)}</h1>
           </div>
         </div>
         <div class="head-actions">
@@ -7279,7 +7319,6 @@
 
 ${metricsStripHtml()}
 
-${callOffStripHtml()}
 
 ${forecastHistoryHtml()}
 
@@ -7293,35 +7332,6 @@ ${unitBoardHtml()}
     `;
   }
 
-
-  // Only on the dashboard when there is something to show. A standing panel that
-  // reads "nothing open" every month is a panel people stop looking at.
-  function callOffStripHtml() {
-    const open = openBook();
-    if (!open.length) return '';
-    return `
-      <section class="group">
-        <div class="group-top">
-          <div class="sec-h" style="margin-bottom:0">
-            <span class="sec-t">Balance still to raise</span>
-            <span class="sec-s">· Approved, no PR raised for it yet</span>
-          </div>
-          <button class="btn btn-s btn-ghost" data-step="${PAGE_CALLOFFS}">See PR status →</button>
-        </div>
-        <div class="simple fixed">
-          <div class="card">
-            <div class="t">Pending ${infoMark('The part of a requirement that has been agreed but that no requisition covers yet. Raise a PR for it here whenever you are ready.')}</div>
-            <div class="n" style="color:var(--flag)">${aedM(openValue())}</div>
-            <div class="s">across ${fmt(open.length)} lines</div>
-          </div>
-          <div class="card">
-            <div class="t">Requisitions raised ${infoMark('Every requisition this business unit has raised, including the ones that went automatically with the cycle. One per supplier. Dynamics turns each into a purchase order.')}</div>
-            <div class="n">${fmt(state.prs.filter(r => r.unit === state.myUnit).length)}</div>
-            <div class="s">this business unit</div>
-          </div>
-        </div>
-      </section>`;
-  }
 
   // Version history for the forecast file. Shared between the dashboard and the
   // Forecast step so the two can never show different data for the same thing.
@@ -8009,20 +8019,21 @@ ${unitBoardHtml()}
   // Which plants the list may draw from. Never wider than the planner's own.
   const imUnits = () => state.assignedUnits;
 
+  // The title holds the left of the row; everything you do to the table —
+  // search, filters, freeze, CSV — sits together on the right.
   function imFilterBar(id, defs, extra, lead, count) {
     return `
       <div class="imbar">
         ${lead || ''}
+        <span class="imbar-gap"></span>
         <input type="search" id="imSearch" class="imq" placeholder="Search code or description"
           aria-label="Search the item master" value="${esc(state.imFilter)}">
         ${fltBarHtml(id, defs)}
         ${extra}
-        <span class="imbar-gap"></span>
-        <button class="btn btn-s btn-ghost imbar-csv" id="imCsv" title="Download what you are looking at, filters and order included">
+        <button class="btn btn-s btn-p imbar-csv" id="imCsv" title="Download what you are looking at, filters and order included">
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5v8M6.6 8.4 10 11.8l3.4-3.4M4.6 15.4h10.8"/></svg>
           CSV
         </button>
-        ${count ? `<span class="muted" style="white-space:nowrap">${count}</span>` : ''}
       </div>
       ${fltChipsHtml(id, defs)}`;
   }
@@ -8420,14 +8431,23 @@ ${unitBoardHtml()}
   // lookups, and the finished goods the forecast is written against. The separate
   // 1,691-row extract browser is gone: the planning table carries the same
   // columns, so it was the same table twice.
-  function imTabsHtml(masterTab, fgTab, inCycle) {
-    return `<span class="imtabs">
-      ${inCycle ? `<button class="chip ${!masterTab && !fgTab ? 'on' : ''}" data-imtab="mat">Planning parameters
-        <span class="chip-a">${fmt(MATERIALS.filter(m => imUnits().includes(m.unit)).length)}</span></button>` : ''}
-      <button class="chip ${masterTab ? 'on' : ''}" data-imtab="master">Master item</button>
-      <button class="chip ${fgTab ? 'on' : ''}" data-imtab="fg">Finished goods
-        <span class="chip-a">${fmt(FG_CATALOG.filter(x => imUnits().includes(x.unit)).length)}</span></button>
-      <span class="imtabs-sep" aria-hidden="true"></span>
+  // The table you are on names the page. Step 2 shows the planning parameters
+  // and nothing else — the two reference tables are the item master in the
+  // rail, where they switch by button.
+  function imOtherHtml(tab, inCycle) {
+    if (inCycle) return '';
+    const all = [
+      // Only while a cycle is live: the parameters belong to the run, so the
+      // button goes to step 2 rather than swapping the table under the rail.
+      { k:'mat',    t:'Planning parameters', n: MATERIALS.filter(m => imUnits().includes(m.unit)).length,
+        live: fcSubmitted() || !!state.forecast, step: true },
+      { k:'master', t:'Master item',         n: null, live: true },
+      { k:'fg',     t:'Finished goods',      n: FG_CATALOG.filter(x => imUnits().includes(x.unit)).length, live: true }
+    ].filter(x => x.live && x.k !== tab);
+    if (!all.length) return '';
+    return `<span class="imref">
+      ${all.map(x => `<button class="btn btn-s btn-o imref-b" ${x.step ? 'data-imstep="1"' : `data-imtab="${x.k}"`}>${esc(x.t)}${
+        x.n == null ? '' : `<span class="imref-n">${fmt(x.n)}</span>`}</button>`).join('')}
     </span>`;
   }
 
@@ -8474,17 +8494,17 @@ ${unitBoardHtml()}
     // One tight line, and it earns the space by saying which of the two things
     // this screen is: the reference master, or step 2 of the cycle checking the
     // rules the run will use.
-    const head = `<div class="imtitle">
-      <h1>${inCycle ? 'Review MRP items' : 'Item master'}</h1>
-      <span>${inCycle
-        ? 'The rules and numbers this run will use'
-        : 'The tag and BU lookups every line is read against, and the finished goods the forecast is written against'}</span>
-    </div>`;
+    const tab = masterTab ? 'master' : fgTab ? 'fg' : 'mat';
+    const TITLES = { mat: 'Planning parameters', master: 'Master item', fg: 'Finished goods' };
+    // The title carries its count as a chip and sits on the filter row itself —
+    // one line above the table rather than three.
+    const titleHtml = `<h1 class="imh1">${TITLES[tab]}${tab === 'mat'
+      ? `<span class="imh1-n">${fmt(MATERIALS.filter(m => imUnits().includes(m.unit)).length)}</span>` : ''}</h1>`;
+    const head = masterTab ? `<div class="imtitle">${titleHtml}${imOtherHtml(tab, inCycle)}</div>` : '';
 
     return `
       ${head}
       ${masterTab ? `
-        <div style="margin:14px 0 18px">${imTabsHtml(masterTab, fgTab, inCycle)}</div>
         <div class="note" style="margin-bottom:14px">
           <strong>Two lookups, and both are live.</strong> Moving a tag onto a different logic re-plans every material
           carrying it, and the Rule column on planning parameters follows immediately — so does the business a BU
@@ -8498,10 +8518,10 @@ ${unitBoardHtml()}
       ${fgTab
         ? imFilterBar('imFg', IM_FG_DEFS(),
             `<button class="chip chip-s ${state.imFgOnly ? 'on' : ''}" id="imFgOnly">In this forecast</button>`,
-            imTabsHtml(masterTab, fgTab, inCycle), `${fmt(rows.length)} of ${fmt(total)}`)
+            titleHtml + imOtherHtml(tab, inCycle))
         : imFilterBar('imMat', IM_MAT_DEFS(),
             `<button class="chip chip-s ${state.imGapsOnly ? 'on' : ''}" id="imGaps">Missing data${withGaps.length ? ` · ${fmt(withGaps.length)}` : ''}</button>`,
-            imTabsHtml(masterTab, fgTab, inCycle), `${fmt(rows.length)} of ${fmt(total)}`)}
+            titleHtml + imOtherHtml(tab, inCycle))}
         <div class="mxwrap"><table class="imtable">
           ${fgTab ? `
           <thead><tr>
@@ -8535,8 +8555,8 @@ ${unitBoardHtml()}
                  headings, because that is the sheet this screen replaces. The
                  six a planner maintains by hand are inputs; everything else
                  arrives from Dynamics or is worked out from what does. */ ''}
-            ${imTh('tag', 'Tag')}${imTh('business', 'Business')}${imTh('unit', 'BU')}${imTh('cat', 'Material Type')}
-            ${imTh('desc', 'Material Code & Description', 'c-desc')}${imTh('uom', 'UOM')}
+            ${imTh('tag', 'Tag')}${imTh('business', 'Business')}${imTh('unit', 'BU')}${imTh('rule', 'Rule')}${imTh('cat', 'Material Type')}
+            ${imTh('code', 'Material Code')}${imTh('desc', 'Description', 'c-desc')}${imTh('uom', 'UOM')}
             ${imTh('fg', 'Associated FG')}
             ${imTh('soh', 'SOH', 'r')}<th class="r">Daily Req</th>
             <th class="r">LM Cons</th><th class="r">Avg. Cons</th><th class="r">L3M Cons</th><th class="r">L6M Cons</th>
@@ -8546,7 +8566,7 @@ ${unitBoardHtml()}
             <th class="r">Cons. per 1 MT FG</th>
             ${imTh('moq', 'MOQ', 'r')}${imTh('bundle', 'Bundle Size', 'r')}
             <th class="r">New PR Qty</th>${imTh('price', 'Avg. Unit Cost', 'r')}<th class="r col-val">PR Value</th>
-            ${imTh('rule', 'Rule')}<th>Action</th><th>Remarks</th>
+            <th>Action</th><th>Remarks</th>
           </tr></thead>
           <tbody>
             ${rows.length === 0 ? '<tr><td colspan="29" style="text-align:center;padding:26px" class="muted">Nothing matches these filters.</td></tr>' : ''}
@@ -8569,11 +8589,16 @@ ${unitBoardHtml()}
                 </td>
                 <td class="muted">${esc((UNITS.find(u => u.code === m.unit) || {}).business || '—')}</td>
                 <td class="muted">${esc(m.unit)}</td>
-                <td class="muted">${esc(m.cat === 'Packaging' ? 'Packaging Material' : m.cat)}</td>
-                <td class="c-desc">
-                  <div class="cell-code muted">${esc(m.code)}</div>
-                  <div style="font-weight: var(--w-med)">${esc(m.desc)}</div>
+                ${/* The rule sits with the identity columns, not past the figures:
+                     it is the first thing checked about a line. */ ''}
+                <td>
+                  ${out
+                    ? `<span class="pill p-mute" title="tag ${m.tag} — ${esc(TAG_MEANING[m.tag] || '')}">not planned</span>`
+                    : `<select data-logic="${m.code}" aria-label="Calculation rule for ${esc(m.code)}" ${isAdmin() ? '' : 'disabled title="Only the planning admin can change this"'}>${options(m)}</select>`}
                 </td>
+                <td class="muted">${esc(m.cat === 'Packaging' ? 'Packaging Material' : m.cat)}</td>
+                <td class="cell-code">${esc(m.code)}</td>
+                <td class="c-desc" style="font-weight: var(--w-med)">${esc(m.desc)}</td>
                 <td class="muted">${esc(m.uom)}</td>
                 ${/* A material with a finished good behind it is planned from the
                      forecast; one without is planned from what it has used. */ ''}
@@ -8600,11 +8625,6 @@ ${unitBoardHtml()}
                 <td class="r num" style="font-weight: var(--w-semi)">${n(l.prQty)}</td>
                 <td class="r num muted">${m.price ? m.price.toFixed(2) : '—'}</td>
                 <td class="r num col-val muted">${out || !l.prValue ? '—' : aed(l.prValue)}</td>
-                <td>
-                  ${out
-                    ? `<span class="pill p-mute" title="tag ${m.tag} — ${esc(TAG_MEANING[m.tag] || '')}">not planned</span>`
-                    : `<select data-logic="${m.code}" aria-label="Calculation rule for ${esc(m.code)}" ${isAdmin() ? '' : 'disabled title="Only the planning admin can change this"'}>${options(m)}</select>`}
-                </td>
                 <td><input type="text" class="cell-txt" data-t="action" data-code="${m.code}" aria-label="Action for ${esc(m.code)}"
                      value="${esc(m.action || '')}" placeholder="—"></td>
                 <td><input type="text" class="cell-txt cell-txt-w" data-t="remarks" data-code="${m.code}" aria-label="Remarks for ${esc(m.code)}"
@@ -8612,7 +8632,8 @@ ${unitBoardHtml()}
               </tr>`;
             }).join('')}
           </tbody>`}
-        </table></div>`}
+        </table></div>
+        <p class="imcount">${fmt(rows.length)} of ${fmt(total)}</p>`}
 
       ${inCycle ? `
       <div class="step-bar">
@@ -9044,7 +9065,7 @@ ${unitBoardHtml()}
                 <td class="r" style="white-space:nowrap">
                   ${!canEdit(l) ? `<span class="pill p-mute">Read-only</span> <button class="btn btn-s btn-ghost" data-open="${l.m.code}">Open</button>`
                     : `${(approvalOf(l.m.code) || {}).kind === 'reject' ? '<span class="pill p-crit">Rejected</span> ' : ''}${createPrCell(l.m.code)}
-                       <button class="btn btn-s" data-open="${l.m.code}">${l.exceptions.length ? 'Open' : 'Trail'}</button>`}
+                       <button class="btn btn-s" data-open="${l.m.code}">${l.exceptions.length ? 'Open' : 'Calculation details'}</button>`}
                 </td>
               </tr>`;
             }).join('')}
@@ -9373,7 +9394,7 @@ ${unitBoardHtml()}
             : `<div class="note"><strong>Within every tolerance.</strong> Nothing on this line was worth a call — it is shown read-only so you can check the working.</div>`}
 
           <div>
-            <div class="label" style="margin-bottom:6px">Calculation trail</div>
+            <div class="label" style="margin-bottom:6px">Calculation details</div>
             <div class="trail">
               ${l.trail.map(s => `<div class="trail-row">
                 <div><div class="t">${esc(s.label)}</div><div class="e">${esc(s.expr)}</div>${s.note ? `<div class="n">${esc(s.note)}</div>` : ''}</div>
@@ -9745,7 +9766,7 @@ ${unitBoardHtml()}
             : 'This cycle has not started. Bring in the sales forecast first — the order list is the last thing the cycle produces, not the first.'}</p>
           <button class="btn btn-p" data-step="${cs.step}">${esc(cs.cta)}</button>
         </div></div>
-        ${openBook().length ? `<div style="margin-top:14px">${callOffStripHtml()}</div>` : ''}`;
+        `;
     }
 
     const orders = buildOrders();
@@ -9861,10 +9882,10 @@ ${unitBoardHtml()}
           ${/* Opening the next plan is a deliberate act, offered only once the
                approver has answered. Balances still to raise come across. Once
                it is on offer it is the thing to do, so it leads, filled. */ ''}
-          ${cycleState().k === 'closed' ? `<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>` : ''}
           ${bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-s btn-ghost" id="exportCsv">Export CSV</button>
           <button class="btn btn-s btn-ghost" data-step="0">Back to dashboard</button>
+          ${cycleState().k === 'closed' ? `<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>` : ''}
         </div>
         <div class="step-sub">
           <p class="step-n">${state.simulate
@@ -10246,9 +10267,9 @@ ${unitBoardHtml()}
               <path d="M3.5 10h13M11.5 5l5 5-5 5"/>
             </svg>
           </button>` : ''}
-          ${cycleState().k === 'closed' ? '<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>' : ''}
           ${answered && bk.length ? `<button class="btn btn-o btn-lg" data-step="${PAGE_CALLOFFS}">PR status</button>` : ''}
           <button class="btn btn-o btn-lg" data-step="0">Back to dashboard</button>
+          ${cycleState().k === 'closed' ? '<button class="btn btn-p btn-lg" id="nextCycle">Start the next plan</button>' : ''}
         </div>
         <div class="step-sub">
           <p class="step-n">${state.simulate
@@ -10491,11 +10512,23 @@ ${unitBoardHtml()}
   // Stand-in for the D365 round trip. In the live system conversion happens on
   // Dynamics' own schedule and this button does not exist — it is here so a
   // walkthrough can show both statuses without waiting on an integration.
-  function syncD365() {
+  // Dynamics answers on its own: a raised requisition comes back as a purchase
+  // order a few seconds later, the way the feed would deliver it. There is no
+  // button for it — nobody presses "check" in the real thing.
+  let d365Timer = null;
+  function scheduleD365() {
+    clearTimeout(d365Timer);
+    if (!awaitingPo().length) return;
+    d365Timer = setTimeout(() => syncD365(true), 6000);
+  }
+
+  function syncD365(quiet) {
     const due = awaitingPo();
     if (!due.length) return;
-    state.fcLoading = { t0: Date.now(), total: 900, msg: 'Checking Dynamics 365 for converted requisitions' };
-    render();
+    if (!quiet) {
+      state.fcLoading = { t0: Date.now(), total: 900, msg: 'Checking Dynamics 365 for converted requisitions' };
+      render();
+    }
     setTimeout(() => {
       due.forEach(r => { r.status = 'po'; });
       savePrs();
@@ -10506,7 +10539,7 @@ ${unitBoardHtml()}
         s: 'Dynamics issued the purchase orders. Nothing on the balance changes — a requisition that became a PO still counts as raised against its requirement.'
       }, 7000);
       render();
-    }, 900);
+    }, quiet ? 0 : 900);
   }
 
   // ---------- RUN HISTORY ----------
@@ -10723,6 +10756,7 @@ ${unitBoardHtml()}
       state.poOpen = made.length === 1 ? first.ref : null;
       state.maxStep = Math.max(state.maxStep, PAGE_CALLOFFS);
       go(back);
+      scheduleD365();
     }, 1100);
   }
 
@@ -11958,6 +11992,13 @@ ${unitBoardHtml()}
     const imGaps = $('#imGaps'); if (imGaps) imGaps.onclick = () => { state.imGapsOnly = !state.imGapsOnly; render(); };
 
     // ---- the item master's filters, sort and tabs ----------------------------
+    // The parameters live inside the cycle, so their button is a step, not a tab.
+    document.querySelectorAll('[data-imstep]').forEach(b => b.onclick = () => {
+      state.imTab = 'mat';
+      state.maxStep = Math.max(state.maxStep, STEP_ITEMS);
+      go(STEP_ITEMS);
+    });
+
     document.querySelectorAll('[data-imtab]').forEach(b => b.onclick = () => {
       state.imTab = b.dataset.imtab;
       // The two masters do not share columns, so a sort or a category filter

@@ -1037,8 +1037,10 @@
   .mxfz { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
   .mxmenu-a { position: relative; display: inline-flex; }
   .mxmenu-a .btn.on { border-color: var(--accent); color: var(--accent); }
+  /* Opens from the button's right edge: these controls sit at the right of the
+     toolbar, and a menu dropping to the right ran off the panel. */
   .mxmenu {
-    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
     width: 250px; padding: 5px; border-radius: var(--r-lg);
     background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
   }
@@ -1205,7 +1207,16 @@
   }
 
   .imbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-  .imcount { margin: 8px 0 14px; font-size: var(--fs-xs); color: var(--muted); text-align: right; }
+  /* The one control that changes what the table holds, so it carries the brand
+     edge while the rest stay quiet. */
+  .btn.fltbtn { border-color: var(--cta); color: var(--cta); font-weight: var(--w-semi);
+                display: inline-flex; align-items: center; gap: 6px; }
+  .btn.fltbtn svg { width: 14px; height: 14px; }
+  .btn.fltbtn:hover:not(:disabled) { background: var(--hi-soft); }
+  .btn.fltbtn.on { background: var(--hi-soft); }
+  .imfoot { display: flex; align-items: center; gap: 12px; margin: 8px 0 14px; }
+  .imfoot-frz { display: inline-flex; }
+  .imcount { margin: 0 0 0 auto; font-size: var(--fs-xs); color: var(--muted); }
   .imbar-gap { flex: 1; min-width: 0; }
   .imtabs, .mxbar .imtabs { display: inline-flex; align-items: center; gap: 6px; }
   .imtabs-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
@@ -1219,10 +1230,15 @@
     font-size: var(--fs-xs); padding: 5px 8px; max-width: 170px;
     border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   }
+  /* A pill with the magnifier drawn into its background, so the icon needs no
+     wrapper round the field. */
   .imq {
-    width: 220px; font: inherit; font-size: var(--fs-sm); padding: 6px 10px;
-    border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    width: 230px; font: inherit; font-size: var(--fs-sm); padding: 6px 12px 6px 32px;
+    border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238b8b95' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='9' cy='9' r='5.4'/%3E%3Cpath d='M13 13l3.6 3.6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: left 11px center; background-size: 14px;
   }
+  .imq::-webkit-search-cancel-button { margin-left: 4px; }
   .imq:focus, .imbar select:focus { outline: none; border-color: var(--accent); }
   /* Wide by nature — seventeen columns is what the sheet has — so it scrolls
      inside the panel rather than squeezing every column to nothing. */
@@ -8028,11 +8044,11 @@ ${unitBoardHtml()}
         <span class="imbar-gap"></span>
         <input type="search" id="imSearch" class="imq" placeholder="Search code or description"
           aria-label="Search the item master" value="${esc(state.imFilter)}">
-        ${fltBarHtml(id, defs)}
         ${extra}
+        ${fltBarHtml(id, defs)}
         <button class="btn btn-s btn-p imbar-csv" id="imCsv" title="Download what you are looking at, filters and order included">
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5v8M6.6 8.4 10 11.8l3.4-3.4M4.6 15.4h10.8"/></svg>
-          CSV
+          Export
         </button>
       </div>
       ${fltChipsHtml(id, defs)}`;
@@ -8153,8 +8169,9 @@ ${unitBoardHtml()}
     const st = fltState(id);
     return `
       <span class="mxmenu-a" data-flt-anchor="${id}">
-        <button class="btn btn-s ${st.menu != null ? 'on' : ''}" data-flt-open="${id}">
-          <span aria-hidden="true">+</span> Filter
+        <button class="btn btn-s fltbtn ${st.menu != null ? 'on' : ''}" data-flt-open="${id}">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5h13l-5 5.6v4.6l-3 1.8v-6.4L3.5 5Z"/></svg>
+          Filter
         </button>
         ${st.menu == null ? '' : fltMenuHtml(id, defs)}
       </span>`;
@@ -8261,7 +8278,6 @@ ${unitBoardHtml()}
   }));
   const IM_MAT_DEFS = () => [
     { k:'tag',  label:'Tag',      get: m => `Tag ${m.tag}`, values: [0, 1, 2, 3, 4].map(t => `Tag ${t}`) },
-    { k:'unit', label:'Plant',    get: m => m.unit, values: state.assignedUnits },
     { k:'cat',  label:'Category', get: m => m.cat,  values: fltValues(MATERIALS, m => m.cat) },
     { k:'uom',  label:'UOM',      get: m => m.uom,  values: fltValues(MATERIALS, m => m.uom) },
     { k:'src',  label:'Source',   get: m => m.src,  values: fltValues(MATERIALS, m => m.src) },
@@ -8633,7 +8649,7 @@ ${unitBoardHtml()}
             }).join('')}
           </tbody>`}
         </table></div>
-        <p class="imcount">${fmt(rows.length)} of ${fmt(total)}</p>`}
+        <div class="imfoot"><span class="imfoot-frz"></span><p class="imcount">${fmt(rows.length)} of ${fmt(total)}</p></div>`}
 
       ${inCycle ? `
       <div class="step-bar">
@@ -9554,9 +9570,9 @@ ${unitBoardHtml()}
       t.querySelectorAll('.frz').forEach(c => { c.classList.remove('frz', 'frz-last'); c.style.left = ''; });
       t.querySelectorAll('.frz-pin').forEach(b => b.remove());
       t.querySelectorAll('.has-pin').forEach(c => c.classList.remove('has-pin'));
-      // The item master has a toolbar of its own; its control sits there, beside
-      // the CSV button, rather than on a line above the table.
-      const tools = t.matches('.imtable') ? root.querySelector('.imbar') : null;
+      // The item master keeps its control under the table, on the line that
+      // counts the rows, rather than above it.
+      const tools = t.matches('.imtable') ? root.querySelector('.imfoot-frz') : null;
       let bar = tools ? tools.querySelector('.frz-bar')
         : wrap.previousElementSibling && wrap.previousElementSibling.classList.contains('frz-bar')
           ? wrap.previousElementSibling : null;
@@ -9594,7 +9610,7 @@ ${unitBoardHtml()}
       if (!bar) {
         bar = document.createElement(tools ? 'span' : 'div');
         bar.className = 'frz-bar' + (tools ? ' frz-bar-in' : '');
-        if (tools) tools.insertBefore(bar, tools.querySelector('#imCsv')); else wrap.before(bar);
+        if (tools) tools.append(bar); else wrap.before(bar);
       }
       const tip = n
         ? `${n} column${n === 1 ? '' : 's'} pinned. Scroll sideways for the rest — the pin on any heading pins up to that column.`
